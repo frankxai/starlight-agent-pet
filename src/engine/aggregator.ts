@@ -24,7 +24,7 @@ export class FleetAggregator {
 
   private liveSessions: Map<string, AgentSession> = new Map();
   private pendingPermissions: Map<string, PermissionRequest> = new Map();
-  private currentPetSkin: PetSkinId = 'stellaris';
+  private currentPetSkin: PetSkinId = 'codex_bot';
   private soundEnabled = true;
   private serverStartTime = Date.now();
 

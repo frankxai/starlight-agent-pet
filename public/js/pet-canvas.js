@@ -262,7 +262,9 @@ class PetRenderer {
 
     this.ctx.translate(this.width / 2, this.height / 2 + bounceY);
 
-    if (this.skin === 'stellaris') {
+    if (this.skin === 'codex_bot') {
+      this.drawCodexBot();
+    } else if (this.skin === 'stellaris') {
       this.drawStellaris();
     } else if (this.skin === 'arcanea_luminor') {
       this.drawArcaneaLuminor();
@@ -618,6 +620,129 @@ class PetRenderer {
         '#00ff88'
       );
     }
+
+    ctx.restore();
+  }
+
+  drawCodexBot() {
+    const ctx = this.ctx;
+    ctx.save();
+
+    // 1. Blue Puffy Cloud Head
+    const cloudColor = '#4a72ff';
+    const cloudDark = '#2c47c9';
+    const cloudOutline = '#152473';
+
+    ctx.save();
+    // Cloud Lobes
+    ctx.fillStyle = cloudColor;
+    ctx.strokeStyle = cloudOutline;
+    ctx.lineWidth = 3;
+
+    // Head Base Cloud
+    ctx.beginPath();
+    ctx.arc(0, -14, 22, 0, Math.PI * 2); // Center
+    ctx.arc(-16, -18, 16, 0, Math.PI * 2); // Left top
+    ctx.arc(16, -18, 16, 0, Math.PI * 2); // Right top
+    ctx.arc(-22, -6, 14, 0, Math.PI * 2); // Left bottom
+    ctx.arc(22, -6, 14, 0, Math.PI * 2); // Right bottom
+    ctx.arc(0, -28, 15, 0, Math.PI * 2); // Top crown
+    ctx.fill();
+    ctx.stroke();
+
+    // 2. Robot Torso & Limbs
+    // Legs
+    ctx.fillStyle = cloudDark;
+    ctx.strokeStyle = cloudOutline;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(-14, 22, 10, 14, 4);
+    ctx.roundRect(4, 22, 10, 14, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Body
+    ctx.fillStyle = cloudColor;
+    ctx.beginPath();
+    ctx.roundRect(-18, 2, 36, 24, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // Arms
+    const armWave = Math.sin(this.time * 4) * 3;
+    ctx.beginPath();
+    ctx.roundRect(-24, 6 + armWave, 8, 16, 4); // Left arm
+    ctx.roundRect(16, 6 - armWave, 8, 16, 4);  // Right arm
+    ctx.fill();
+    ctx.stroke();
+
+    // Chest Terminal Prompt Glyphs: > _
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText('> _', -9, 17);
+
+    // 3. Rounded Monitor Face
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = cloudOutline;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(-20, -22, 40, 26, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Terminal Eyes: > _
+    const eyeCyan = '#67e8f9';
+    ctx.fillStyle = eyeCyan;
+    ctx.shadowColor = eyeCyan;
+    ctx.shadowBlur = 8;
+    ctx.font = 'bold 14px monospace';
+
+    if (this.state === 'thinking') {
+      ctx.fillText('> ..', -14, -4);
+    } else if (this.state === 'coding') {
+      ctx.fillText('> =', -13, -4);
+    } else if (this.state === 'sleeping') {
+      ctx.fillText('- -', -11, -4);
+    } else {
+      // Normal: > _ (blinking cursor)
+      const cursor = Math.sin(this.time * 6) > 0 ? '_' : ' ';
+      ctx.fillText(`> ${cursor}`, -13, -4);
+    }
+    ctx.restore();
+
+    // 5. Floating Bottom Indicators (Voice Waveform + Task Badge)
+    const badgeY = 46;
+
+    // Waveform Circle
+    ctx.save();
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(-14, badgeY, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Waveform Bars
+    ctx.fillStyle = '#ffffff';
+    const waveH = Math.sin(this.time * 8) * 3;
+    ctx.fillRect(-18, badgeY - 2 - waveH, 2, 4 + waveH * 2);
+    ctx.fillRect(-15, badgeY - 5 + waveH, 2, 10 - waveH * 2);
+    ctx.fillRect(-12, badgeY - 3 - waveH, 2, 6 + waveH * 2);
+    ctx.restore();
+
+    // Task Count Green Circle (e.g. 16 or subagent count)
+    ctx.save();
+    ctx.fillStyle = '#22c55e';
+    ctx.beginPath();
+    ctx.arc(14, badgeY, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#052e16';
+    ctx.font = 'bold 11px sans-serif';
+    const taskCount = this.subagentCount > 0 ? this.subagentCount : 16;
+    ctx.fillText(taskCount.toString(), taskCount >= 10 ? 8 : 11, badgeY + 4);
+    ctx.restore();
 
     ctx.restore();
   }

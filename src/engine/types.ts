@@ -20,6 +20,7 @@ export type AgentActivityState =
   | 'sleeping';
 
 export type PetSkinId = 
+  | 'codex_bot'
   | 'stellaris' 
   | 'arcanea_luminor' 
   | 'cyber_bot' 
