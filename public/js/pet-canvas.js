@@ -1,0 +1,428 @@
+// Starlight Agent Pet - High-Performance Canvas Animation & Particle Engine
+class PetRenderer {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    
+    // Internal resolution for crisp retina display
+    this.dpr = window.devicePixelRatio || 1;
+    this.width = 140;
+    this.height = 140;
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
+    this.ctx.scale(this.dpr, this.dpr);
+
+    this.skin = 'stellaris';
+    this.state = 'idle';
+    this.tokenVelocity = 0; // tokens/sec
+    this.subagentCount = 0;
+
+    this.time = 0;
+    this.particles = [];
+    this.pokeAnimation = 0; // poke timer
+    this.mouseX = this.width / 2;
+    this.mouseY = this.height / 2;
+
+    this.initEvents();
+    this.animate = this.animate.bind(this);
+    requestAnimationFrame(this.animate);
+  }
+
+  initEvents() {
+    window.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouseX = (e.clientX - rect.left);
+      this.mouseY = (e.clientY - rect.top);
+    });
+
+    this.canvas.addEventListener('click', () => {
+      this.triggerPoke();
+    });
+  }
+
+  setSkin(skin) {
+    this.skin = skin;
+  }
+
+  setState(state) {
+    this.state = state;
+  }
+
+  setVelocity(vel) {
+    this.tokenVelocity = vel;
+  }
+
+  setSubagents(count) {
+    this.subagentCount = count;
+  }
+
+  triggerPoke() {
+    this.pokeAnimation = 1.0;
+    // Spawn celebratory particles
+    for (let i = 0; i < 16; i++) {
+      this.spawnParticle(
+        this.width / 2, 
+        this.height / 2, 
+        (Math.random() - 0.5) * 4, 
+        (Math.random() - 0.5) * 4 - 2, 
+        Math.random() > 0.5 ? '#00f0ff' : '#a855f7'
+      );
+    }
+  }
+
+  spawnParticle(x, y, vx, vy, color) {
+    this.particles.push({
+      x, y, vx, vy,
+      color,
+      alpha: 1.0,
+      size: Math.random() * 3 + 1.5,
+      life: 1.0
+    });
+  }
+
+  updateParticles() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= 0.02;
+      p.size *= 0.96;
+      if (p.alpha <= 0 || p.size <= 0.2) {
+        this.particles.splice(i, 1);
+      }
+    }
+  }
+
+  renderParticles() {
+    for (const p of this.particles) {
+      this.ctx.save();
+      this.ctx.globalAlpha = Math.max(0, p.alpha);
+      this.ctx.fillStyle = p.color;
+      this.ctx.shadowColor = p.color;
+      this.ctx.shadowBlur = 8;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+  }
+
+  animate() {
+    this.time += 0.03;
+    if (this.pokeAnimation > 0) {
+      this.pokeAnimation = Math.max(0, this.pokeAnimation - 0.03);
+    }
+
+    this.ctx.clearRect(0, 0, this.width, this.height);
+
+    // Spawn ambient particle trails based on token velocity
+    const spawnChance = Math.min(0.8, 0.05 + (this.tokenVelocity / 100));
+    if (Math.random() < spawnChance) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 35;
+      const px = this.width / 2 + Math.cos(angle) * radius;
+      const py = this.height / 2 + Math.sin(angle) * radius;
+      this.spawnParticle(px, py, (Math.random() - 0.5) * 1.5, -Math.random() * 1.5 - 0.5, '#00f0ff');
+    }
+
+    // Render active skin
+    this.ctx.save();
+    
+    // Jump / poke bounce
+    let bounceY = Math.sin(this.time * 3) * 4;
+    if (this.pokeAnimation > 0) {
+      bounceY -= Math.sin(this.pokeAnimation * Math.PI) * 18;
+    }
+
+    this.ctx.translate(this.width / 2, this.height / 2 + bounceY);
+
+    if (this.skin === 'stellaris') {
+      this.drawStellaris();
+    } else if (this.skin === 'arcanea_luminor') {
+      this.drawArcaneaLuminor();
+    } else {
+      this.drawCyberBot();
+    }
+
+    // Render subagent satellites if swarming
+    if (this.subagentCount > 0) {
+      this.drawSubagentSatellites();
+    }
+
+    this.ctx.restore();
+
+    // Render particles overlay
+    this.updateParticles();
+    this.renderParticles();
+
+    requestAnimationFrame(this.animate);
+  }
+
+  drawStellaris() {
+    const ctx = this.ctx;
+    const isSleeping = this.state === 'sleeping';
+    const isCoding = this.state === 'coding';
+    const isThinking = this.state === 'thinking';
+
+    // Cosmic Aura Glow
+    const auraColor = isCoding ? '#00f0ff' : isThinking ? '#a855f7' : '#ec4899';
+    ctx.save();
+    ctx.shadowColor = auraColor;
+    ctx.shadowBlur = 20 + Math.sin(this.time * 4) * 8;
+
+    // Tail (undulating cosmic sine wave)
+    ctx.beginPath();
+    ctx.moveTo(18, 12);
+    const tailWave = Math.sin(this.time * 4) * 12;
+    ctx.quadraticCurveTo(45 + tailWave, 5, 38, -25 + tailWave);
+    ctx.quadraticCurveTo(25, -15, 12, 5);
+    ctx.fillStyle = 'rgba(168, 85, 247, 0.85)';
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, 8, 22, 20, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#0d111a';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = auraColor;
+    ctx.stroke();
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(0, -10, 18, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = auraColor;
+    ctx.stroke();
+
+    // Ears
+    // Left ear
+    ctx.beginPath();
+    ctx.moveTo(-16, -18);
+    ctx.lineTo(-24, -36);
+    ctx.lineTo(-6, -26);
+    ctx.closePath();
+    ctx.fillStyle = '#1e293b';
+    ctx.fill();
+    ctx.strokeStyle = auraColor;
+    ctx.stroke();
+
+    // Right ear
+    ctx.beginPath();
+    ctx.moveTo(16, -18);
+    ctx.lineTo(24, -36);
+    ctx.lineTo(6, -26);
+    ctx.closePath();
+    ctx.fillStyle = '#1e293b';
+    ctx.fill();
+    ctx.strokeStyle = auraColor;
+    ctx.stroke();
+
+    // Inner ear glow
+    ctx.fillStyle = auraColor;
+    ctx.beginPath();
+    ctx.moveTo(-14, -20);
+    ctx.lineTo(-20, -32);
+    ctx.lineTo(-8, -25);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(14, -20);
+    ctx.lineTo(20, -32);
+    ctx.lineTo(8, -25);
+    ctx.closePath();
+    ctx.fill();
+
+    // Eyes
+    ctx.shadowBlur = 10;
+    if (isSleeping) {
+      // Sleeping curved eyes
+      ctx.beginPath();
+      ctx.arc(-7, -10, 4, 0.2, Math.PI - 0.2);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(7, -10, 4, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Zzz floating text
+      ctx.fillStyle = '#a855f7';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('z', 22, -20 + Math.sin(this.time * 2) * 4);
+    } else {
+      // Expressive glowing eyes
+      const eyeLookX = Math.max(-2, Math.min(2, (this.mouseX - this.width / 2) / 25));
+      const eyeLookY = Math.max(-2, Math.min(2, (this.mouseY - this.height / 2) / 25));
+
+      ctx.fillStyle = auraColor;
+      ctx.beginPath();
+      ctx.arc(-7 + eyeLookX, -10 + eyeLookY, isThinking ? 4.5 : 3.5, 0, Math.PI * 2);
+      ctx.arc(7 + eyeLookX, -10 + eyeLookY, isThinking ? 4.5 : 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eye glint
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(-6 + eyeLookX, -12 + eyeLookY, 1.2, 0, Math.PI * 2);
+      ctx.arc(8 + eyeLookX, -12 + eyeLookY, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Forehead Celestial Star Mark
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(0, -19, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  drawArcaneaLuminor() {
+    const ctx = this.ctx;
+    ctx.save();
+    
+    const rot = this.time * 1.5;
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 18;
+
+    // Central Floating Crystal Octahedron
+    ctx.beginPath();
+    ctx.moveTo(0, -22);
+    ctx.lineTo(16, 0);
+    ctx.lineTo(0, 22);
+    ctx.lineTo(-16, 0);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.25)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#00f0ff';
+    ctx.stroke();
+
+    // Inner Core
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 15;
+    ctx.fill();
+
+    // Orbiting Elemental Shards
+    const shards = 4;
+    for (let i = 0; i < shards; i++) {
+      const angle = rot + (i * (Math.PI * 2 / shards));
+      const dist = 32 + Math.sin(this.time * 3 + i) * 4;
+      const sx = Math.cos(angle) * dist;
+      const sy = Math.sin(angle) * dist * 0.6; // elliptical orbit
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.lineTo(5, 0);
+      ctx.lineTo(0, 6);
+      ctx.lineTo(-5, 0);
+      ctx.closePath();
+      ctx.fillStyle = i % 2 === 0 ? '#ec4899' : '#a855f7';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  drawCyberBot() {
+    const ctx = this.ctx;
+    ctx.save();
+
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 16;
+
+    // Bot Chassis
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2;
+
+    // Body
+    ctx.beginPath();
+    ctx.roundRect(-18, -14, 36, 28, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Antenna
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(0, -24);
+    ctx.strokeStyle = '#00ff88';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, -26, 3, 0, Math.PI * 2);
+    ctx.fillStyle = Math.sin(this.time * 6) > 0 ? '#00ff88' : '#ef4444';
+    ctx.fill();
+
+    // Digital Visor
+    ctx.fillStyle = '#022c22';
+    ctx.beginPath();
+    ctx.roundRect(-14, -8, 28, 14, 3);
+    ctx.fill();
+
+    // Matrix Eyes in Visor
+    ctx.fillStyle = '#00ff88';
+    if (this.state === 'coding') {
+      ctx.font = '8px monospace';
+      ctx.fillText('01', -10, 2);
+      ctx.fillText('10', 2, 2);
+    } else if (this.state === 'thinking') {
+      ctx.fillText('..', -8, 2);
+      ctx.fillText('..', 4, 2);
+    } else {
+      ctx.fillRect(-10, -3, 6, 4);
+      ctx.fillRect(4, -3, 6, 4);
+    }
+
+    // Jet Thruster Particles underneath
+    if (Math.random() < 0.7) {
+      this.spawnParticle(
+        this.width / 2 + (Math.random() - 0.5) * 12,
+        this.height / 2 + 18,
+        (Math.random() - 0.5) * 0.8,
+        Math.random() * 2 + 1,
+        '#00ff88'
+      );
+    }
+
+    ctx.restore();
+  }
+
+  drawSubagentSatellites() {
+    const ctx = this.ctx;
+    const count = Math.min(6, this.subagentCount);
+    for (let i = 0; i < count; i++) {
+      const angle = -this.time * 2 + (i * (Math.PI * 2 / count));
+      const dist = 42;
+      const sx = Math.cos(angle) * dist;
+      const sy = Math.sin(angle) * dist;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+window.PetRenderer = PetRenderer;
