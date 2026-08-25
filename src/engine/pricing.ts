@@ -203,3 +203,27 @@ export function calculateCost(tokens: TokenUsage, modelName?: string): CostEstim
     totalCostUSD: Number(totalCostUSD.toFixed(4)),
   };
 }
+
+export function calculateSavings(tokens: TokenUsage, modelName?: string): { cacheSavingsUSD: number; cacheHitPercentage: number; totalUncachedCostUSD: number } {
+  const pricing = resolveModelPricing(modelName);
+  
+  // If cache read was charged at full input rate:
+  const uncachedReadCost = (tokens.cacheReadTokens / 1_000_000) * pricing.inputPerMTok;
+  const actualReadCost = (tokens.cacheReadTokens / 1_000_000) * pricing.cacheReadPerMTok;
+  const cacheSavingsUSD = Math.max(0, uncachedReadCost - actualReadCost);
+
+  const totalInputCandidate = tokens.inputTokens + tokens.cacheReadTokens;
+  const cacheHitPercentage = totalInputCandidate > 0 
+    ? Math.round((tokens.cacheReadTokens / totalInputCandidate) * 100) 
+    : 0;
+
+  const totalUncachedCostUSD = ((tokens.inputTokens + tokens.cacheReadTokens) / 1_000_000) * pricing.inputPerMTok +
+    (tokens.outputTokens / 1_000_000) * pricing.outputPerMTok;
+
+  return {
+    cacheSavingsUSD: Number(cacheSavingsUSD.toFixed(4)),
+    cacheHitPercentage,
+    totalUncachedCostUSD: Number(totalUncachedCostUSD.toFixed(4)),
+  };
+}
+

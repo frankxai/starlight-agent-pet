@@ -140,6 +140,60 @@ export class TelemetryServer {
       return;
     }
 
+    if (pathname === '/api/permission/approve' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { id } = JSON.parse(body);
+          const success = this.aggregator.approvePermission(id);
+          this.broadcast();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: success ? 'ok' : 'not_found', id }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid payload' }));
+        }
+      });
+      return;
+    }
+
+    if (pathname === '/api/permission/deny' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { id } = JSON.parse(body);
+          const success = this.aggregator.denyPermission(id);
+          this.broadcast();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: success ? 'ok' : 'not_found', id }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid payload' }));
+        }
+      });
+      return;
+    }
+
+    if (pathname === '/api/pet/sound' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { enabled } = JSON.parse(body);
+          this.aggregator.setSoundEnabled(Boolean(enabled));
+          this.broadcast();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', soundEnabled: Boolean(enabled) }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid payload' }));
+        }
+      });
+      return;
+    }
+
     if (pathname === '/api/pet/skin' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => body += chunk);

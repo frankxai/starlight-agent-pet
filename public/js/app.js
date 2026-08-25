@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let petRenderer = null;
   let ws = null;
   let fleetState = null;
-  let isHudOpen = true;
 
   // Initialize Canvas Pet
   if (document.getElementById('pet-canvas')) {
@@ -18,34 +17,52 @@ document.addEventListener('DOMContentLoaded', () => {
   const islandStatus = document.getElementById('island-status');
   const islandVelocity = document.getElementById('island-velocity');
 
-  // HUD Elements
+  // Metrics
   const metricTodayCost = document.getElementById('metric-today-cost');
   const metricTodayTokens = document.getElementById('metric-today-tokens');
   const metricVelocity = document.getElementById('metric-velocity');
   const metricActiveSessions = document.getElementById('metric-active-sessions');
+  const metricSavings = document.getElementById('metric-savings');
   const sessionsList = document.getElementById('sessions-list');
+  const permissionsContainer = document.getElementById('permissions-container');
 
-  // Progression Elements
+  // Progression
   const userLevel = document.getElementById('user-level');
   const userGate = document.getElementById('user-gate');
   const xpText = document.getElementById('xp-text');
   const xpFill = document.getElementById('xp-fill');
 
-  // Setup Dragging for Floating Pet
+  // Setup Dragging
   initDraggable(petContainer);
 
   // Setup Skin Picker Buttons
   document.querySelectorAll('.skin-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.skin-btn').forEach(b => b.classList.remove('active'));
-      const skin = e.target.dataset.skin;
-      e.target.classList.add('active');
+      const target = e.currentTarget;
+      const skin = target.dataset.skin;
+      target.classList.add('active');
       if (petRenderer) petRenderer.setSkin(skin);
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'SET_SKIN', skin }));
       }
     });
   });
+
+  // Sound Toggle
+  const soundBtn = document.getElementById('sound-toggle-btn');
+  if (soundBtn) {
+    soundBtn.addEventListener('click', () => {
+      const isEnabled = petRenderer ? !petRenderer.audio.enabled : false;
+      if (petRenderer) petRenderer.audio.enabled = isEnabled;
+      soundBtn.textContent = isEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+      fetch('/api/pet/sound', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: isEnabled })
+      }).catch(() => {});
+    });
+  }
 
   // Connect WebSocket
   connectWebSocket();
@@ -74,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ws.onclose = () => {
-      console.warn('[Starlight HUD] Stream disconnected, retrying in 2s...');
       setTimeout(connectWebSocket, 2000);
     };
   }
@@ -114,6 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (metricVelocity) metricVelocity.textContent = `${state.currentFleetVelocity} tok/s`;
     if (metricActiveSessions) metricActiveSessions.textContent = state.activeSessions.length.toString();
+    if (metricSavings && state.historicalSummary) {
+      metricSavings.textContent = `$${(state.historicalSummary.totalAllTimeSavingsUSD || 0).toFixed(2)}`;
+    }
 
     // 5. Update Progression & Arcanea Gate
     if (state.pet) {
@@ -126,11 +145,50 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 6. Update Fleet Sessions List
+    // 6. Update Pending Permissions Card
+    if (permissionsContainer) {
+      renderPermissions(state.pendingPermissions || []);
+    }
+
+    // 7. Update Fleet Sessions List
     if (sessionsList) {
       renderSessions(state.activeSessions);
     }
   }
+
+  function renderPermissions(perms) {
+    if (!perms || perms.length === 0) {
+      permissionsContainer.style.display = 'none';
+      return;
+    }
+
+    permissionsContainer.style.display = 'block';
+    permissionsContainer.innerHTML = perms.map(p => `
+      <div class="glass-panel" style="padding: 16px; border: 1px solid var(--amber-glow); background: rgba(245, 158, 11, 0.1); margin-bottom: 18px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="font-size: 20px;">⚡</div>
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: #fff;">Permission Requested: ${escapeHtml(p.toolName)}</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(p.description)}</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-approve" onclick="handlePermissionAction('${p.id}', 'approve')">✓ Approve</button>
+          <button class="btn-deny" onclick="handlePermissionAction('${p.id}', 'deny')">✕ Deny</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.handlePermissionAction = function(id, action) {
+    fetch(`/api/permission/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    }).then(() => {
+      if (petRenderer) petRenderer.triggerPoke();
+    }).catch(console.error);
+  };
 
   function renderSessions(sessions) {
     if (!sessions || sessions.length === 0) {
@@ -143,6 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const ctxClass = isHealthy ? 'ctx-healthy' : s.context.warningLevel === 'high' ? 'ctx-high' : 'ctx-critical';
       const harnessClass = `harness-${s.harness}`;
       const activeToolHtml = s.activeTool ? `<div style="font-size: 11px; color: var(--cyan-glow); margin-top: 4px;">⚡ Tool: <strong>${escapeHtml(s.activeTool.name)}</strong> (${escapeHtml(s.activeTool.summary || '')})</div>` : '';
+      const savingsHtml = s.savings && s.savings.cacheSavingsUSD > 0 
+        ? `<span style="color: var(--emerald-glow); margin-left: 8px;">(Saved: $${s.savings.cacheSavingsUSD.toFixed(3)})</span>` 
+        : '';
 
       return `
         <div class="glass-panel session-card">
@@ -177,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           <div class="session-stats-row">
             <span>Tokens: <strong>${s.tokens.totalTokens.toLocaleString()}</strong></span>
-            <span>Cost: <strong>$${s.cost.totalCostUSD.toFixed(4)}</strong></span>
+            <span>Cost: <strong>$${s.cost.totalCostUSD.toFixed(4)}</strong> ${savingsHtml}</span>
             <span>State: <strong style="color: var(--cyan-glow);">${s.state.toUpperCase()}</strong></span>
           </div>
         </div>

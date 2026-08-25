@@ -1,6 +1,6 @@
 # ✦ Starlight Agent Pet & Fleet Observatory
 
-> **Unified Real-Time Coding Agent Telemetry & Interactive Desktop Companion**  
+> **Unified Real-Time Coding Agent Telemetry, Cost Optimizer & Interactive Desktop Companion**  
 > *Sovereign Telemetry Substrate for Claude Code, Codex CLI, Antigravity, Hermes Agent, Kilo, and Grok.*
 
 ---
@@ -12,8 +12,8 @@
 It absorbs the best token calculation algorithms from **`ccusage`** and **`tokscale`**, the interactive desktop pet mechanics from **`Clyde`** and **`AgentPet`**, and the dynamic island / live WebSocket stream patterns from **`Claude Buddy`**, elevating them into a unified, glassmorphic **Observatory HUD** tailored for Frank's Starlight & Arcanea ecosystem.
 
 ```
-       /\_/\    ✦ STELLARIS [Level 7]
-      ( o.o )   Gate 7: Crown (Luminor)
+       /\_/\    ✦ STELLARIS [Level 10]
+      ( o.o )   Gate 10: Unity (Nexus Master)
        > ^ <    XP: [████████░░] 840/1000
                 Mood: "Hyper-Focus / Burning code fast!"
 ```
@@ -29,27 +29,26 @@ It absorbs the best token calculation algorithms from **`ccusage`** and **`toksc
    - **Hermes Agent**: Live queue and log monitor from `AppData/Local/hermes` and `~/.hermes/`.
    - **Kilo / Grok / ACOS**: Cross-harness auto-router session detection and worktree monitoring.
 
-2. **Interactive Floating Pet & Dynamic Island**
-   - **Multiple Pet Archetypes**:
-     - 🦊 **Stellaris The Celestial Cosmic Fox**: Pulsing cosmic tail, reactive eyes that track cursor, and star dust trails.
-     - 💎 **Arcanea Luminor**: Floating crystalline geometric golem with rotating elemental shards (Fire, Water, Wind, Earth, Void, Light).
-     - 🤖 **Cyber-Pulsar 2077**: Retro cyber-bot with digital visor LED matrix and particle jet thrusters.
-   - **8 Reactive States**: `IDLE`, `THINKING`, `CODING`, `SWARMING`, `APPROVAL_REQUIRED`, `LOW_CONTEXT_ALERT`, `VICTORY`, `SLEEPING`.
-   - **Real-Time Particle Trail**: Speed and particle frequency scale dynamically with live fleet token velocity (`tok/s`).
-   - **Poke Interactions**: Click or double-click the pet to trigger backflips, emotes, and cheerful particles.
+2. **Interactive Floating Pet & 5 Archetype Companions**
+   - 🦊 **Stellaris (Celestial Cosmic Kitsune)**: 9 pulsing celestial tails, reactive eyes that track cursor, and star dust trails.
+   - 💎 **Arcanea Luminor**: Floating crystalline geometric golem with rotating elemental shards representing the 10 Gates.
+   - 🤖 **Cyber-Pulsar 2077**: Retro cyber-bot with digital visor LED matrix and particle jet thrusters.
+   - 🐈 **Kuro-Neko Astral**: Space Void Cat with celestial crescent moon, glowing slit eyes, and floating rune dust.
+   - 👑 **Starlight Queen Hive-Mind**: Geodesic constellation orb with dynamic particle links and orbiting queen familiars.
 
-3. **Click-to-Open Glassmorphic Telemetry Observatory HUD**
-   - **Single-Click Instant Modal**: Click the floating pet to expand the full HUD dashboard.
-   - **Live Fleet Session Cards**: Real-time cards for every active CLI process, active tool names, git branches, and durations.
-   - **Context Window Health Bar**: Circular/linear gauge of context saturation (% of 200k / 1M / 2M window used) with early warnings before compaction.
-   - **Cost & Token Intelligence**: Real-time spend vs budget, breakdowns by harness and model provider.
-   - **Arcanea Ten Gates Gamification**: Earn XP and level up from *Apprentice* to *Nexus Master* based on clean code builds and token milestones.
+3. **Web Audio API Synth Engine (Zero Audio File Dependencies)**
+   - Synthesizes dynamic harmonics for task completion chimes (880Hz + 1318Hz), level-up arpeggios, permission alerts, and purrs when poked.
 
-4. **Multi-Surface Runtime**
-   - **Desktop App**: Electron / Webview floating window with system tray menu.
-   - **Web / Browser Mode**: Local server accessible at `http://localhost:9224`.
-   - **CLI Mode**: Terminal dashboard with ASCII art and live stats.
-   - **Zero-Latency Push Hooks**: Drop-in hooks for Claude Code pushing instant lifecycle events.
+4. **Holographic Permission Cards & Interactive Approval**
+   - When any agent requests tool permission, an interactive card floats next to the pet with `[Approve]` and `[Deny]` buttons to resolve without switching terminal tabs.
+
+5. **Prompt Cache Savings & Budget Optimizer**
+   - Real-time calculator showing exact dollars saved through Anthropic prompt caching and Gemini context cache hits.
+   - Context window health radar alerting before auto-compaction.
+
+6. **Shell Statusline & Multi-Machine Sync**
+   - `starlight-pet prompt`: Compact one-line statusline for PowerShell `$PROFILE`, Bash `.bashrc`, Zsh, or Starship.
+   - `starlight-pet sync`: Snapshots telemetry for multi-machine synchronization (`@frank-desktop` and `@yoga-c940`).
 
 ---
 
@@ -81,7 +80,6 @@ node bin/starlight-pet.js hud
 # On Windows PowerShell:
 .\hooks\install-hooks.ps1
 ```
-*This installs `starlight-pet-hook.js` into `~/.claude/hooks/` to stream instant tool calls and context alerts.*
 
 ---
 
@@ -90,10 +88,13 @@ node bin/starlight-pet.js hud
 | Command | Description |
 |---|---|
 | `starlight-pet status` | Quick terminal dashboard with ASCII pet art and live metrics |
+| `starlight-pet prompt` | Compact one-line ANSI string for shell prompt statuslines |
 | `starlight-pet hud` | Launches background server and opens the full interactive HUD |
 | `starlight-pet daemon` | Runs the telemetry daemon and file watcher on port `9224` |
-| `starlight-pet report` | Generates a formatted Markdown report of token usage and costs |
-| `starlight-pet report --json` | Outputs raw JSON telemetry for multi-machine synchronization |
+| `starlight-pet skin <name>` | Switches pet companion skin (`stellaris`, `arcanea_luminor`, `cyber_bot`, `kuro_neko`, `starlight_queen`) |
+| `starlight-pet sync` | Exports multi-machine telemetry snapshot |
+| `starlight-pet report` | Generates a formatted Markdown report of token usage, costs, and cache savings |
+| `starlight-pet report --json` | Outputs raw JSON telemetry for automated monitoring pipelines |
 | `starlight-pet hooks install` | Installs lifecycle hooks into Claude Code |
 
 ---

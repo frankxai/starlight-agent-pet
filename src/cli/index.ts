@@ -1,7 +1,8 @@
 import { FleetAggregator } from '../engine/aggregator';
 import { FileSystemWatcher } from '../engine/watcher';
 import { TelemetryServer } from '../engine/server';
-import { spawn, exec } from 'child_process';
+import { PetSkinId } from '../engine/types';
+import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -17,6 +18,13 @@ export async function runCli(args: string[]) {
       
       const state = await aggregator.getFleetState();
       printTerminalDashboard(state);
+      break;
+    }
+
+    case 'prompt':
+    case 'statusline': {
+      const state = await aggregator.getFleetState();
+      printPromptStatusline(state);
       break;
     }
 
@@ -44,6 +52,24 @@ export async function runCli(args: string[]) {
       break;
     }
 
+    case 'skin': {
+      const skin = (args[1] || 'stellaris') as PetSkinId;
+      aggregator.setPetSkin(skin);
+      console.log(`\x1b[32m[✓] Pet companion skin switched to: ${skin}\x1b[0m`);
+      break;
+    }
+
+    case 'sync': {
+      const state = await aggregator.getFleetState();
+      const syncDir = path.join(os.homedir(), '.starlight', 'telemetry-sync');
+      fs.mkdirSync(syncDir, { recursive: true });
+      const filename = `sync-${Date.now()}-${state.systemStatus.machine.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+      const target = path.join(syncDir, filename);
+      fs.writeFileSync(target, JSON.stringify(state, null, 2));
+      console.log(`\x1b[32m[✓] Telemetry sync snapshot exported to:\x1b[0m ${target}`);
+      break;
+    }
+
     case 'report': {
       const state = await aggregator.getFleetState();
       const format = args[1] === '--json' ? 'json' : 'markdown';
@@ -68,12 +94,15 @@ export async function runCli(args: string[]) {
     case 'help':
     default: {
       console.log(`
-\x1b[1mSTARLIGHT AGENT PET & FLEET TELEMETRY CLI\x1b[0m
+\x1b[1m✦ STARLIGHT AGENT PET & FLEET TELEMETRY CLI ✦\x1b[0m
 
 Commands:
   \x1b[36mstarlight-pet status\x1b[0m         View live fleet status and pet mood in terminal
+  \x1b[36mstarlight-pet prompt\x1b[0m         One-line statusline string for shell prompts
   \x1b[36mstarlight-pet hud\x1b[0m            Launch interactive floating pet and full Observatory HUD
   \x1b[36mstarlight-pet daemon\x1b[0m         Run background telemetry bridge server (port 9224)
+  \x1b[36mstarlight-pet skin <name>\x1b[0m    Switch pet skin (stellaris | arcanea_luminor | cyber_bot | kuro_neko | starlight_queen)
+  \x1b[36mstarlight-pet sync\x1b[0m           Export multi-machine telemetry snapshot
   \x1b[36mstarlight-pet report\x1b[0m         Generate Markdown usage and cost breakdown
   \x1b[36mstarlight-pet report --json\x1b[0m  Output raw JSON telemetry
   \x1b[36mstarlight-pet hooks install\x1b[0m  Install drop-in lifecycle hooks into Claude Code
@@ -96,10 +125,10 @@ function printTerminalDashboard(state: any) {
   `;
   console.log(petArt);
 
-  console.log('─'.repeat(70));
-  console.log(`\x1b[1mFLEET STATE:\x1b[0m ${formatStateBadge(overallState)}  │  \x1b[1mBURN VELOCITY:\x1b[0m \x1b[33m${currentFleetVelocity} tok/s\x1b[0m  │  \x1b[1mACTIVE SESSIONS:\x1b[0m ${activeSessions.length}`);
-  console.log(`\x1b[1mTODAY TOKENS:\x1b[0m \x1b[36m${today.totalTokens.toLocaleString()}\x1b[0m  │  \x1b[1mESTIMATED COST:\x1b[0m \x1b[32m$${today.totalCostUSD.toFixed(4)}\x1b[0m`);
-  console.log('─'.repeat(70));
+  console.log('─'.repeat(78));
+  console.log(`\x1b[1mFLEET STATE:\x1b[0m ${formatStateBadge(overallState)}  │  \x1b[1mVELOCITY:\x1b[0m \x1b[33m${currentFleetVelocity} tok/s\x1b[0m  │  \x1b[1mSESSIONS:\x1b[0m ${activeSessions.length}`);
+  console.log(`\x1b[1mTODAY TOKENS:\x1b[0m \x1b[36m${today.totalTokens.toLocaleString()}\x1b[0m  │  \x1b[1mEST. COST:\x1b[0m \x1b[32m$${today.totalCostUSD.toFixed(4)}\x1b[0m  │  \x1b[1mSAVINGS:\x1b[0m \x1b[32m$${(today.totalSavingsUSD || 0).toFixed(2)}\x1b[0m`);
+  console.log('─'.repeat(78));
 
   console.log('\n\x1b[1mACTIVE & RECENT AGENT SESSIONS:\x1b[0m');
   if (activeSessions.length === 0) {
@@ -130,11 +159,20 @@ function printTerminalDashboard(state: any) {
   console.log('\n\x1b[2mRun "starlight-pet hud" to open the interactive floating pet dashboard.\x1b[0m\n');
 }
 
+function printPromptStatusline(state: any) {
+  const { pet, historicalSummary, currentFleetVelocity, overallState } = state;
+  const emote = overallState === 'coding' ? '( > ^ < )' : overallState === 'thinking' ? '( o . o )' : '( ^ _ ^ )';
+  const cost = historicalSummary.today.totalCostUSD.toFixed(2);
+  const vel = currentFleetVelocity > 0 ? ` │ ⚡ ${currentFleetVelocity} t/s` : '';
+  process.stdout.write(`\x1b[36m${emote} ✦ L${pet.level}\x1b[0m │ \x1b[32m$${cost}\x1b[0m${vel} `);
+}
+
 function printMarkdownReport(state: any) {
   const { today } = state.historicalSummary;
   console.log(`# Starlight Agent Fleet Telemetry Report — ${today.date}`);
   console.log(`\n**Total Tokens:** ${today.totalTokens.toLocaleString()}  `);
   console.log(`**Total Cost:** $${today.totalCostUSD.toFixed(4)}  `);
+  console.log(`**Total Cache Savings:** $${(today.totalSavingsUSD || 0).toFixed(4)}  `);
   console.log(`**Active Sessions:** ${today.sessionsCount}  `);
   console.log(`**Pet Level:** Level ${state.pet.level} (${state.pet.arcaneaGate})  \n`);
 

@@ -1,10 +1,127 @@
-// Starlight Agent Pet - High-Performance Canvas Animation & Particle Engine
+// Starlight Agent Pet - High-Performance Canvas Animation & Particle Engine + Web Audio Synth
+
+class WebAudioSynth {
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+  }
+
+  init() {
+    if (!this.ctx && typeof window !== 'undefined') {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playChime() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+    osc1.frequency.setValueAtTime(880, now); // A5
+    osc2.frequency.setValueAtTime(1318.51, now); // E6
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.6);
+    osc2.stop(now + 0.6);
+  }
+
+  playLevelUp() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.08);
+
+      gain.gain.setValueAtTime(0.09, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.08 + 0.3);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now + i * 0.08);
+      osc.stop(now + i * 0.08 + 0.3);
+    });
+  }
+
+  playAlert() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.linearRampToValueAtTime(330, now + 0.2);
+
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.25);
+  }
+
+  playPurr() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.linearRampToValueAtTime(160, now + 0.15);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+
+    gain.gain.setValueAtTime(0.06, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.35);
+  }
+}
+
 class PetRenderer {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
     
-    // Internal resolution for crisp retina display
+    // Internal resolution for retina display
     this.dpr = window.devicePixelRatio || 1;
     this.width = 140;
     this.height = 140;
@@ -16,10 +133,11 @@ class PetRenderer {
     this.state = 'idle';
     this.tokenVelocity = 0; // tokens/sec
     this.subagentCount = 0;
+    this.audio = new WebAudioSynth();
 
     this.time = 0;
     this.particles = [];
-    this.pokeAnimation = 0; // poke timer
+    this.pokeAnimation = 0;
     this.mouseX = this.width / 2;
     this.mouseY = this.height / 2;
 
@@ -45,6 +163,13 @@ class PetRenderer {
   }
 
   setState(state) {
+    if (this.state !== state) {
+      if (state === 'approval_required' || state === 'low_context_alert') {
+        this.audio.playAlert();
+      } else if (state === 'idle' && this.state === 'coding') {
+        this.audio.playChime();
+      }
+    }
     this.state = state;
   }
 
@@ -58,6 +183,7 @@ class PetRenderer {
 
   triggerPoke() {
     this.pokeAnimation = 1.0;
+    this.audio.playPurr();
     // Spawn celebratory particles
     for (let i = 0; i < 16; i++) {
       this.spawnParticle(
@@ -140,6 +266,10 @@ class PetRenderer {
       this.drawStellaris();
     } else if (this.skin === 'arcanea_luminor') {
       this.drawArcaneaLuminor();
+    } else if (this.skin === 'kuro_neko') {
+      this.drawKuroNeko();
+    } else if (this.skin === 'starlight_queen') {
+      this.drawStarlightQueen();
     } else {
       this.drawCyberBot();
     }
@@ -164,7 +294,6 @@ class PetRenderer {
     const isCoding = this.state === 'coding';
     const isThinking = this.state === 'thinking';
 
-    // Cosmic Aura Glow
     const auraColor = isCoding ? '#00f0ff' : isThinking ? '#a855f7' : '#ec4899';
     ctx.save();
     ctx.shadowColor = auraColor;
@@ -198,7 +327,6 @@ class PetRenderer {
     ctx.stroke();
 
     // Ears
-    // Left ear
     ctx.beginPath();
     ctx.moveTo(-16, -18);
     ctx.lineTo(-24, -36);
@@ -209,7 +337,6 @@ class PetRenderer {
     ctx.strokeStyle = auraColor;
     ctx.stroke();
 
-    // Right ear
     ctx.beginPath();
     ctx.moveTo(16, -18);
     ctx.lineTo(24, -36);
@@ -239,7 +366,6 @@ class PetRenderer {
     // Eyes
     ctx.shadowBlur = 10;
     if (isSleeping) {
-      // Sleeping curved eyes
       ctx.beginPath();
       ctx.arc(-7, -10, 4, 0.2, Math.PI - 0.2);
       ctx.strokeStyle = '#94a3b8';
@@ -250,12 +376,10 @@ class PetRenderer {
       ctx.arc(7, -10, 4, 0.2, Math.PI - 0.2);
       ctx.stroke();
 
-      // Zzz floating text
       ctx.fillStyle = '#a855f7';
       ctx.font = '11px sans-serif';
       ctx.fillText('z', 22, -20 + Math.sin(this.time * 2) * 4);
     } else {
-      // Expressive glowing eyes
       const eyeLookX = Math.max(-2, Math.min(2, (this.mouseX - this.width / 2) / 25));
       const eyeLookY = Math.max(-2, Math.min(2, (this.mouseY - this.height / 2) / 25));
 
@@ -265,7 +389,6 @@ class PetRenderer {
       ctx.arc(7 + eyeLookX, -10 + eyeLookY, isThinking ? 4.5 : 3.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Eye glint
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(-6 + eyeLookX, -12 + eyeLookY, 1.2, 0, Math.PI * 2);
@@ -273,11 +396,113 @@ class PetRenderer {
       ctx.fill();
     }
 
-    // Forehead Celestial Star Mark
+    // Forehead Star
     ctx.fillStyle = '#fbbf24';
     ctx.beginPath();
     ctx.arc(0, -19, 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.restore();
+  }
+
+  drawKuroNeko() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.shadowColor = '#c084fc';
+    ctx.shadowBlur = 18;
+
+    // Void Shadow Cat Silhouette
+    ctx.beginPath();
+    ctx.ellipse(0, 6, 20, 18, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#05070f';
+    ctx.fill();
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Cat Head
+    ctx.beginPath();
+    ctx.arc(0, -12, 17, 0, Math.PI * 2);
+    ctx.fillStyle = '#090d1a';
+    ctx.fill();
+    ctx.stroke();
+
+    // Cat Ears
+    ctx.beginPath();
+    ctx.moveTo(-14, -18);
+    ctx.lineTo(-20, -34);
+    ctx.lineTo(-5, -27);
+    ctx.closePath();
+    ctx.fillStyle = '#c084fc';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(14, -18);
+    ctx.lineTo(20, -34);
+    ctx.lineTo(5, -27);
+    ctx.closePath();
+    ctx.fill();
+
+    // Slit Glowing Eyes
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.ellipse(-6, -12, 2.5, 4.5, 0.1, 0, Math.PI * 2);
+    ctx.ellipse(6, -12, 2.5, 4.5, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Floating Celestial Crescent Moon
+    const moonAngle = this.time * 2;
+    const mx = Math.cos(moonAngle) * 30;
+    const my = Math.sin(moonAngle) * 12 - 20;
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0.5, Math.PI * 1.5);
+    ctx.fillStyle = '#fde047';
+    ctx.shadowColor = '#fde047';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  drawStarlightQueen() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.shadowColor = '#f43f5e';
+    ctx.shadowBlur = 22;
+
+    // Central Geodesic Queen Core
+    const rot = this.time * 1.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    ctx.fill();
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Orbiting Constellation Nodes
+    for (let i = 0; i < 6; i++) {
+      const a = rot + (i * Math.PI / 3);
+      const r = 28 + Math.sin(this.time * 4 + i) * 6;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+    }
 
     ctx.restore();
   }
@@ -317,7 +542,7 @@ class PetRenderer {
       const angle = rot + (i * (Math.PI * 2 / shards));
       const dist = 32 + Math.sin(this.time * 3 + i) * 4;
       const sx = Math.cos(angle) * dist;
-      const sy = Math.sin(angle) * dist * 0.6; // elliptical orbit
+      const sy = Math.sin(angle) * dist * 0.6;
 
       ctx.save();
       ctx.translate(sx, sy);
@@ -346,18 +571,15 @@ class PetRenderer {
     ctx.shadowColor = '#00ff88';
     ctx.shadowBlur = 16;
 
-    // Bot Chassis
     ctx.fillStyle = '#0f172a';
     ctx.strokeStyle = '#00ff88';
     ctx.lineWidth = 2;
 
-    // Body
     ctx.beginPath();
     ctx.roundRect(-18, -14, 36, 28, 6);
     ctx.fill();
     ctx.stroke();
 
-    // Antenna
     ctx.beginPath();
     ctx.moveTo(0, -14);
     ctx.lineTo(0, -24);
@@ -369,13 +591,11 @@ class PetRenderer {
     ctx.fillStyle = Math.sin(this.time * 6) > 0 ? '#00ff88' : '#ef4444';
     ctx.fill();
 
-    // Digital Visor
     ctx.fillStyle = '#022c22';
     ctx.beginPath();
     ctx.roundRect(-14, -8, 28, 14, 3);
     ctx.fill();
 
-    // Matrix Eyes in Visor
     ctx.fillStyle = '#00ff88';
     if (this.state === 'coding') {
       ctx.font = '8px monospace';
@@ -389,7 +609,6 @@ class PetRenderer {
       ctx.fillRect(4, -3, 6, 4);
     }
 
-    // Jet Thruster Particles underneath
     if (Math.random() < 0.7) {
       this.spawnParticle(
         this.width / 2 + (Math.random() - 0.5) * 12,

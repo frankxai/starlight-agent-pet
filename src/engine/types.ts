@@ -23,8 +23,8 @@ export type PetSkinId =
   | 'stellaris' 
   | 'arcanea_luminor' 
   | 'cyber_bot' 
-  | 'neon_dragon' 
-  | 'astral_cat';
+  | 'kuro_neko' 
+  | 'starlight_queen';
 
 export interface TokenUsage {
   inputTokens: number;
@@ -43,6 +43,12 @@ export interface CostEstimate {
   totalCostUSD: number;
 }
 
+export interface SavingsEstimate {
+  cacheSavingsUSD: number;
+  cacheHitPercentage: number;
+  totalUncachedCostUSD: number;
+}
+
 export interface ContextWindowHealth {
   usedTokens: number;
   maxTokens: number;
@@ -59,6 +65,17 @@ export interface AgentToolCall {
   startedAt: number;
   durationMs?: number;
   status: 'running' | 'completed' | 'failed';
+  inputArgs?: Record<string, any>;
+}
+
+export interface PermissionRequest {
+  id: string;
+  sessionId: string;
+  harness: AgentHarness;
+  toolName: string;
+  description: string;
+  requestedAt: number;
+  status: 'pending' | 'approved' | 'denied';
 }
 
 export interface AgentSession {
@@ -74,6 +91,7 @@ export interface AgentSession {
   subagentCount: number;
   tokens: TokenUsage;
   cost: CostEstimate;
+  savings?: SavingsEstimate;
   context: ContextWindowHealth;
   startedAt: number;
   lastActiveAt: number;
@@ -86,6 +104,7 @@ export interface DailyUsageSummary {
   date: string; // YYYY-MM-DD
   totalTokens: number;
   totalCostUSD: number;
+  totalSavingsUSD?: number;
   sessionsCount: number;
   tokensByHarness: Record<AgentHarness, number>;
   costByHarness: Record<AgentHarness, number>;
@@ -95,11 +114,13 @@ export interface DailyUsageSummary {
 
 export interface FleetState {
   activeSessions: AgentSession[];
+  pendingPermissions: PermissionRequest[];
   historicalSummary: {
     today: DailyUsageSummary;
     last7Days: DailyUsageSummary[];
     totalAllTimeCostUSD: number;
     totalAllTimeTokens: number;
+    totalAllTimeSavingsUSD: number;
   };
   overallState: AgentActivityState;
   activeSubagentsTotal: number;
@@ -112,6 +133,7 @@ export interface FleetState {
     arcaneaGate: string; // e.g., "Gate 1: Foundation", "Gate 7: Crown"
     currentMood: string;
     speechBubble?: string;
+    soundEnabled: boolean;
   };
   systemStatus: {
     machine: string;
@@ -123,13 +145,14 @@ export interface FleetState {
 
 export interface HookEventPayload {
   harness: AgentHarness;
-  event: 'session_start' | 'pre_tool_use' | 'post_tool_use' | 'notification' | 'stop' | 'status_update';
+  event: 'session_start' | 'pre_tool_use' | 'post_tool_use' | 'notification' | 'stop' | 'status_update' | 'permission_request';
   sessionId: string;
   model?: string;
   task?: string;
   workspace?: string;
   toolName?: string;
   toolSummary?: string;
+  toolArgs?: Record<string, any>;
   tokens?: Partial<TokenUsage>;
   contextRemainingPct?: number;
   machineTag?: string;

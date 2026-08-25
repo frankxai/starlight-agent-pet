@@ -10,9 +10,10 @@ import {
   AgentActivityState, 
   PetSkinId, 
   HookEventPayload, 
-  AgentHarness 
+  AgentHarness,
+  PermissionRequest 
 } from './types';
-import { calculateCost } from './pricing';
+import { calculateCost, calculateSavings } from './pricing';
 
 export class FleetAggregator {
   private claudeParser = new ClaudeParser();
@@ -22,14 +23,45 @@ export class FleetAggregator {
   private grokParser = new GrokKiloParser();
 
   private liveSessions: Map<string, AgentSession> = new Map();
-  private liveHookOverrides: Map<string, Partial<AgentSession>> = new Map();
+  private pendingPermissions: Map<string, PermissionRequest> = new Map();
   private currentPetSkin: PetSkinId = 'stellaris';
+  private soundEnabled = true;
   private serverStartTime = Date.now();
 
   constructor() {}
 
   public setPetSkin(skin: PetSkinId) {
     this.currentPetSkin = skin;
+  }
+
+  public setSoundEnabled(enabled: boolean) {
+    this.soundEnabled = enabled;
+  }
+
+  public approvePermission(permissionId: string): boolean {
+    const perm = this.pendingPermissions.get(permissionId);
+    if (perm) {
+      perm.status = 'approved';
+      const session = this.liveSessions.get(perm.sessionId);
+      if (session && session.state === 'approval_required') {
+        session.state = 'coding';
+      }
+      return true;
+    }
+    return false;
+  }
+
+  public denyPermission(permissionId: string): boolean {
+    const perm = this.pendingPermissions.get(permissionId);
+    if (perm) {
+      perm.status = 'denied';
+      const session = this.liveSessions.get(perm.sessionId);
+      if (session && session.state === 'approval_required') {
+        session.state = 'idle';
+      }
+      return true;
+    }
+    return false;
   }
 
   public handleHookEvent(payload: HookEventPayload) {
@@ -49,16 +81,27 @@ export class FleetAggregator {
         name: payload.toolName,
         summary: payload.toolSummary || payload.toolName,
         startedAt: Date.now(),
-        status: payload.event === 'stop' ? 'completed' : 'running'
+        status: payload.event === 'stop' ? 'completed' : 'running',
+        inputArgs: payload.toolArgs
       };
     }
 
-    if (payload.event === 'pre_tool_use') {
+    if (payload.event === 'permission_request' || payload.event === 'notification') {
+      existing.state = 'approval_required';
+      const permId = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      this.pendingPermissions.set(permId, {
+        id: permId,
+        sessionId: payload.sessionId,
+        harness: payload.harness,
+        toolName: payload.toolName || 'Tool Action',
+        description: payload.toolSummary || `Approval requested for ${payload.toolName || 'tool execution'}`,
+        requestedAt: Date.now(),
+        status: 'pending'
+      });
+    } else if (payload.event === 'pre_tool_use') {
       existing.state = 'coding';
     } else if (payload.event === 'post_tool_use') {
       existing.state = 'thinking';
-    } else if (payload.event === 'notification') {
-      existing.state = 'approval_required';
     } else if (payload.event === 'stop') {
       existing.state = 'idle';
       if (existing.activeTool) {
@@ -84,6 +127,7 @@ export class FleetAggregator {
       existing.tokens.cacheCreationTokens = payload.tokens.cacheCreationTokens ?? existing.tokens.cacheCreationTokens;
       existing.tokens.totalTokens = existing.tokens.inputTokens + existing.tokens.outputTokens + existing.tokens.cacheCreationTokens + existing.tokens.cacheReadTokens;
       existing.cost = calculateCost(existing.tokens, existing.model);
+      existing.savings = calculateSavings(existing.tokens, existing.model);
     }
 
     existing.lastActiveAt = Date.now();
@@ -119,6 +163,7 @@ export class FleetAggregator {
           session.currentTask = live.currentTask || session.currentTask;
           session.tokens = live.tokens || session.tokens;
           session.cost = live.cost || session.cost;
+          session.savings = live.savings || session.savings;
           session.lastActiveAt = live.lastActiveAt;
         }
       }
@@ -131,6 +176,7 @@ export class FleetAggregator {
     // 2. Compute Fleet-wide Metrics
     let totalTokens = 0;
     let totalCostUSD = 0;
+    let totalSavingsUSD = 0;
     let activeSubagentsTotal = 0;
     let currentFleetVelocity = 0;
 
@@ -165,6 +211,9 @@ export class FleetAggregator {
     for (const s of sessions) {
       totalTokens += s.tokens.totalTokens;
       totalCostUSD += s.cost.totalCostUSD;
+      if (s.savings) {
+        totalSavingsUSD += s.savings.cacheSavingsUSD;
+      }
       activeSubagentsTotal += s.subagentCount;
 
       const isLive = (now - s.lastActiveAt) < 120_000;
@@ -194,6 +243,7 @@ export class FleetAggregator {
       date: todayDate,
       totalTokens,
       totalCostUSD: Number(totalCostUSD.toFixed(4)),
+      totalSavingsUSD: Number(totalSavingsUSD.toFixed(4)),
       sessionsCount: sessions.length,
       tokensByHarness,
       costByHarness,
@@ -204,16 +254,23 @@ export class FleetAggregator {
     // Calculate Arcanea Ten Gates XP and progression
     const petProgression = this.calculatePetProgression(totalTokens, sessions.length);
 
+    // Active pending permissions
+    const pending = Array.from(this.pendingPermissions.values())
+      .filter(p => p.status === 'pending')
+      .slice(0, 5);
+
     // Collect active harnesses
     const activeHarnesses = Array.from(new Set(sessions.filter(s => (now - s.lastActiveAt) < 300_000).map(s => s.harness)));
 
     return {
       activeSessions: sessions.slice(0, 25),
+      pendingPermissions: pending,
       historicalSummary: {
         today: todaySummary,
-        last7Days: [todaySummary], // Extended dynamically
+        last7Days: [todaySummary],
         totalAllTimeCostUSD: Number(totalCostUSD.toFixed(4)),
-        totalAllTimeTokens: totalTokens
+        totalAllTimeTokens: totalTokens,
+        totalAllTimeSavingsUSD: Number(totalSavingsUSD.toFixed(4))
       },
       overallState,
       activeSubagentsTotal,
@@ -225,7 +282,8 @@ export class FleetAggregator {
         nextLevelXP: petProgression.nextLevelXP,
         arcaneaGate: petProgression.arcaneaGate,
         currentMood: this.getPetMood(overallState, currentFleetVelocity),
-        speechBubble: this.getPetSpeech(overallState, sessions[0])
+        speechBubble: this.getPetSpeech(overallState, sessions[0]),
+        soundEnabled: this.soundEnabled
       },
       systemStatus: {
         machine: 'Frank Desktop (@frank-desktop)',
@@ -237,7 +295,6 @@ export class FleetAggregator {
   }
 
   private calculatePetProgression(totalTokens: number, sessionCount: number) {
-    // 10,000 tokens = 100 XP
     const baseXP = Math.round(totalTokens / 100) + (sessionCount * 50);
     const XP_PER_LEVEL = 1000;
     const level = Math.max(1, Math.floor(baseXP / XP_PER_LEVEL) + 1);
@@ -315,6 +372,11 @@ export class FleetAggregator {
         cacheCreationCostUSD: 0,
         cacheReadCostUSD: 0,
         totalCostUSD: 0
+      },
+      savings: {
+        cacheSavingsUSD: 0,
+        cacheHitPercentage: 0,
+        totalUncachedCostUSD: 0
       },
       context: {
         usedTokens: 0,
