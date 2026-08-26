@@ -14,6 +14,7 @@ import {
   PermissionRequest 
 } from './types';
 import { calculateCost, calculateSavings } from './pricing';
+import { HistoricalAnalytics, AnalyticsRecord } from './analytics';
 
 export class FleetAggregator {
   private claudeParser = new ClaudeParser();
@@ -27,9 +28,13 @@ export class FleetAggregator {
   private currentPetSkin: PetSkinId = 'codex_bot';
   private soundEnabled = true;
   private serverStartTime = Date.now();
+  
+  public analytics = new HistoricalAnalytics();
+  private lastCheckedDate: string;
 
-  constructor() {}
-
+  constructor() {
+    this.lastCheckedDate = new Date().toISOString().split('T')[0];
+  }
   public setPetSkin(skin: PetSkinId) {
     this.currentPetSkin = skin;
   }
@@ -251,6 +256,11 @@ export class FleetAggregator {
       costByModel
     };
 
+    if (this.lastCheckedDate && this.lastCheckedDate !== todayDate) {
+      this.snapshotTodayAnalytics(this.lastCheckedDate, sessions);
+      this.lastCheckedDate = todayDate;
+    }
+
     // Calculate Arcanea Ten Gates XP and progression
     const petProgression = this.calculatePetProgression(totalTokens, sessions.length);
 
@@ -345,6 +355,40 @@ export class FleetAggregator {
       return 'Reasoning across the estate...';
     }
     return 'All agent fleets operational.';
+  }
+
+  public snapshotTodayAnalytics(overrideDate?: string, activeSessions?: AgentSession[]): void {
+    const date = overrideDate || new Date().toISOString().split('T')[0];
+    const sessions = activeSessions || Array.from(this.liveSessions.values());
+    
+    const groups: Record<string, AnalyticsRecord> = {};
+    for (const s of sessions) {
+      const key = `${s.harness}|${s.model}|${s.machineTag || '@frank-desktop'}`;
+      if (!groups[key]) {
+        groups[key] = {
+          date,
+          harness: s.harness,
+          model: s.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          totalTokens: 0,
+          costUSD: 0,
+          sessionsCount: 0,
+          machineTag: s.machineTag || '@frank-desktop'
+        };
+      }
+      groups[key].inputTokens += s.tokens.inputTokens;
+      groups[key].outputTokens += s.tokens.outputTokens;
+      groups[key].cacheReadTokens += s.tokens.cacheReadTokens || 0;
+      groups[key].totalTokens += s.tokens.totalTokens;
+      groups[key].costUSD += s.cost.totalCostUSD;
+      groups[key].sessionsCount += 1;
+    }
+    
+    for (const record of Object.values(groups)) {
+      this.analytics.appendDailySummary(record);
+    }
   }
 
   private createSkeletonSession(payload: HookEventPayload): AgentSession {

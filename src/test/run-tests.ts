@@ -202,6 +202,67 @@ async function runTests() {
   const providers = new Set(registry.map(m => m.provider));
   assert(providers.size >= 7, `Registry spans ${providers.size} providers (≥7 expected: anthropic, google, openai, xai, deepseek, kilo, groq, ollama, nvidia)`);
 
+  // 8. Test Historical Analytics
+  console.log('\n8. Testing Historical Analytics Engine...');
+  const { HistoricalAnalytics } = await import('../engine/analytics');
+  const path = await import('path');
+  const os = await import('os');
+  const fs = await import('fs');
+  const testDbPath = path.join(os.tmpdir(), 'test_history_' + Date.now() + '.ndjson');
+  
+  const analytics = new HistoricalAnalytics(testDbPath);
+  analytics.appendDailySummary({
+    date: '2026-08-25',
+    harness: 'claude',
+    model: 'claude-3-7-sonnet-20250219',
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheReadTokens: 0,
+    totalTokens: 1500,
+    costUSD: 0.015,
+    sessionsCount: 1,
+    machineTag: '@test'
+  });
+  analytics.appendDailySummary({
+    date: '2026-08-25',
+    harness: 'antigravity',
+    model: 'gemini-3.7-flash',
+    inputTokens: 2000,
+    outputTokens: 1000,
+    cacheReadTokens: 0,
+    totalTokens: 3000,
+    costUSD: 0.02,
+    sessionsCount: 2,
+    machineTag: '@test'
+  });
+  analytics.appendDailySummary({
+    date: '2026-08-26',
+    harness: 'claude',
+    model: 'claude-3-7-sonnet-20250219',
+    inputTokens: 1000,
+    outputTokens: 1000,
+    cacheReadTokens: 0,
+    totalTokens: 2000,
+    costUSD: 0.025,
+    sessionsCount: 1,
+    machineTag: '@test'
+  });
+
+  const trend = await analytics.getDailyTrend(30);
+  assert(trend.length === 2, 'Trend data returns 2 days of records');
+  assert(trend[0].date === '2026-08-25', 'First date is correct');
+  assert(trend[0].totalTokens === 4500, `First day total tokens is correct (got ${trend[0].totalTokens})`);
+  assert(trend[1].totalTokens === 2000, `Second day total tokens is correct (got ${trend[1].totalTokens})`);
+
+  const modelBreakdown = await analytics.getModelBreakdown(30);
+  assert(modelBreakdown['claude-3-7-sonnet-20250219'].totalTokens === 3500, 'Model breakdown for Claude is correct');
+  assert(modelBreakdown['gemini-3.7-flash'].totalTokens === 3000, 'Model breakdown for Gemini is correct');
+
+  // Clean up
+  if (fs.existsSync(testDbPath)) {
+    fs.unlinkSync(testDbPath);
+  }
+
   console.log(`\n--- TEST RESULTS: ${passed} PASSED, ${failed} FAILED ---\n`);
   if (failed > 0) process.exit(1);
 }

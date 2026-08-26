@@ -34,10 +34,12 @@
   "author": "Frank Riemer (FrankX) <frank@frankx.ai>",
   "license": "MIT",
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^3.6.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20.14.0",
     "@types/ws": "^8.5.10",
     "typescript": "^5.4.5"

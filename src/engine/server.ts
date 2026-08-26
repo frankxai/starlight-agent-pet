@@ -4,9 +4,11 @@ import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { FleetAggregator } from './aggregator';
 import { HookEventPayload, PetSkinId } from './types';
+import { InferenceRouter, RoutingContext } from './router';
 
 export class TelemetryServer {
   private aggregator: FleetAggregator;
+  private router: InferenceRouter;
   private port: number;
   private server: http.Server | null = null;
   private wss: WebSocketServer | null = null;
@@ -15,6 +17,7 @@ export class TelemetryServer {
 
   constructor(aggregator: FleetAggregator, port = 9224) {
     this.aggregator = aggregator;
+    this.router = new InferenceRouter();
     this.port = port;
     this.publicDir = path.resolve(__dirname, '..', '..', 'public');
   }
@@ -122,6 +125,30 @@ export class TelemetryServer {
       return;
     }
 
+    if (pathname === '/api/router/registry' && req.method === 'GET') {
+      const registry = this.router.getRegistry();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(registry));
+      return;
+    }
+
+    if (pathname === '/api/router/decide' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const ctx: RoutingContext = JSON.parse(body);
+          const decision = this.router.route(ctx);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(decision));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
     if (pathname === '/api/hook' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => body += chunk);
@@ -211,6 +238,31 @@ export class TelemetryServer {
           res.end(JSON.stringify({ error: 'invalid payload' }));
         }
       });
+      return;
+    }
+
+    if (pathname === '/api/analytics/trend' && req.method === 'GET') {
+      try {
+        const days = parseInt(url.searchParams.get('days') || '30', 10);
+        const trend = await this.aggregator.analytics.getDailyTrend(days);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(trend));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/analytics/snapshot' && req.method === 'POST') {
+      try {
+        this.aggregator.snapshotTodayAnalytics();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', message: 'Snapshot saved' }));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
       return;
     }
 

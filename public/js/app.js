@@ -64,6 +64,54 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Fetch Model Registry
+  fetch('/api/router/registry')
+    .then(res => res.json())
+    .then(registry => {
+      const grid = document.getElementById('model-registry-grid');
+      if (grid) {
+        grid.innerHTML = registry.map(m => {
+          const providerColors = {
+            anthropic: '#f97316',
+            google: '#4285f4',
+            openai: '#10b981',
+            xai: '#ef4444',
+            deepseek: '#6366f1',
+            kilo: '#fbbf24',
+            groq: '#ec4899',
+            ollama: '#8b5cf6',
+            nvidia: '#76b900'
+          };
+          const providerEmojis = {
+            anthropic: '🧠',
+            google: '🌐',
+            openai: '✨',
+            xai: '✖️',
+            deepseek: '🐳',
+            kilo: '⚡',
+            groq: '🚀',
+            ollama: '🦙',
+            nvidia: '🟩'
+          };
+          const color = providerColors[m.provider] || '#9ca3af';
+          const emoji = providerEmojis[m.provider] || '🤖';
+          const vision = m.supportsVision ? '👁️' : '';
+          const thinking = m.supportsExtendedThinking ? '💭' : '';
+          const tools = m.supportsToolUse ? '🛠️' : '';
+          
+          return `
+            <div style="background: rgba(255,255,255,0.05); border: 1px solid ${color}40; border-radius: 20px; padding: 4px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px;">
+              <span style="color: ${color}; font-weight: bold;">${emoji}</span>
+              <span style="color: #fff; font-weight: 500;">${escapeHtml(m.displayName)}</span>
+              <span style="font-size: 9px; background: ${color}20; color: ${color}; padding: 2px 6px; border-radius: 10px; text-transform: uppercase;">${m.tier}</span>
+              <span style="font-size: 10px; margin-left: 4px; display: flex; gap: 2px;">${vision}${thinking}${tools}</span>
+            </div>
+          `;
+        }).join('');
+      }
+    })
+    .catch(console.error);
+
   // Connect WebSocket
   connectWebSocket();
 
@@ -204,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const savingsHtml = s.savings && s.savings.cacheSavingsUSD > 0 
         ? `<span style="color: var(--emerald-glow); margin-left: 8px;">(Saved: $${s.savings.cacheSavingsUSD.toFixed(3)})</span>` 
         : '';
+      const routingHtml = `<div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1);">Routed via: <strong>${escapeHtml(s.modelDisplayName || s.model)}</strong> ${s.routingReason ? `(${escapeHtml(s.routingReason)})` : '(Auto-selected by active harness)'}</div>`;
 
       return `
         <div class="glass-panel session-card">
@@ -225,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
 
           ${activeToolHtml}
+          ${routingHtml}
 
           <div class="context-bar-container">
             <div class="context-bar-label">
