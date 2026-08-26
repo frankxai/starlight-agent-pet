@@ -166,6 +166,45 @@ export interface ConsolidatedUsageSnapshot {
   error?: string;
 }
 
+export type CompactMetricBasis = 'quota' | 'activity_share' | 'unavailable';
+
+export interface CompactProviderMetric {
+  id: 'codex' | 'claude' | 'grok' | 'antigravity' | 'opencode';
+  label: string;
+  shortLabel: string;
+  percent: number | null;
+  basis: CompactMetricBasis;
+  basisLabel: string;
+  detail: string;
+  resetsAt?: string;
+  status: 'healthy' | 'watch' | 'critical' | 'neutral' | 'unavailable';
+}
+
+export interface CommandCenterSurface {
+  id: 'operations' | 'studio' | 'architecture' | 'ops' | 'fleet';
+  label: string;
+  note: string;
+  url: string;
+}
+
+export interface CommandCenterSnapshot {
+  status: 'online' | 'offline';
+  label: string;
+  url: string;
+  latencyMs: number | null;
+  checkedAt: string;
+  surfaces: CommandCenterSurface[];
+}
+
+export interface CompactHudSnapshot {
+  status: ConsolidatedUsageSnapshot['status'];
+  observedAt?: string;
+  keyProviders: CompactProviderMetric[];
+  allModels: UsageShare[];
+  allQuotas: ProviderQuotaWindow[];
+  commandCenter: CommandCenterSnapshot;
+}
+
 export interface DailyUsageSummary {
   date: string; // YYYY-MM-DD
   totalTokens: number;

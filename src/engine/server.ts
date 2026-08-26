@@ -5,10 +5,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { FleetAggregator } from './aggregator';
 import { HookEventPayload, PetSkinId } from './types';
 import { InferenceRouter, RoutingContext } from './router';
+import { CompactHudService } from './compact-hud';
 
 export class TelemetryServer {
   private aggregator: FleetAggregator;
   private router: InferenceRouter;
+  private compactHud: CompactHudService;
   private port: number;
   private server: http.Server | null = null;
   private wss: WebSocketServer | null = null;
@@ -19,6 +21,7 @@ export class TelemetryServer {
   constructor(aggregator: FleetAggregator, port = 9224) {
     this.aggregator = aggregator;
     this.router = new InferenceRouter();
+    this.compactHud = new CompactHudService(aggregator.usageIntelligence);
     this.port = port;
     this.publicDir = path.resolve(__dirname, '..', '..', 'public');
   }
@@ -133,6 +136,16 @@ export class TelemetryServer {
     if (pathname === '/api/usage' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(this.aggregator.usageIntelligence.getSnapshot()));
+      return;
+    }
+
+    if (pathname === '/api/hud/compact' && req.method === 'GET') {
+      const snapshot = await this.compactHud.getSnapshot();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      res.end(JSON.stringify(snapshot));
       return;
     }
 

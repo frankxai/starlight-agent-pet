@@ -3,6 +3,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let petRenderer = null;
   let ws = null;
   let fleetState = null;
+  let compactRefreshInFlight = false;
+  let compactRefreshTimer = null;
+  const compactMode = new URLSearchParams(window.location.search).get('mode') === 'compact';
+  document.body.classList.toggle('compact-mode', compactMode);
 
   // Initialize Canvas Pet
   if (document.getElementById('pet-canvas')) {
@@ -16,6 +20,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const dynamicIsland = document.getElementById('dynamic-island');
   const islandStatus = document.getElementById('island-status');
   const islandVelocity = document.getElementById('island-velocity');
+  const compactHudToggle = document.getElementById('compact-hud-toggle');
+  const compactHudDrawer = document.getElementById('compact-hud-drawer');
+  const compactProviderNames = document.getElementById('compact-provider-names');
+  const compactProviderValues = document.getElementById('compact-provider-values');
+  const compactQuotaList = document.getElementById('compact-quota-list');
+  const compactModelList = document.getElementById('compact-model-list');
+  const compactModelCount = document.getElementById('compact-model-count');
+  const compactObservedAt = document.getElementById('compact-observed-at');
+  const compactCommandDot = document.getElementById('compact-command-dot');
+  const compactCommandTitle = document.getElementById('compact-command-title');
+  const compactCommandLatency = document.getElementById('compact-command-latency');
+  const compactCommandRoutes = document.getElementById('compact-command-routes');
 
   // Metrics
   const metricProcessedTokens = document.getElementById('metric-processed-tokens');
@@ -44,6 +60,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Setup Dragging
   initDraggable(petContainer);
+
+  if (compactHudToggle && dynamicIsland && compactHudDrawer) {
+    compactHudToggle.addEventListener('click', () => {
+      if (petContainer?.dataset.justDragged === 'true') return;
+      const expanded = !dynamicIsland.classList.contains('is-expanded');
+      dynamicIsland.classList.toggle('is-expanded', expanded);
+      compactHudToggle.setAttribute('aria-expanded', String(expanded));
+      compactHudDrawer.setAttribute('aria-hidden', String(!expanded));
+      window.starlightDesktop?.setExpanded?.(expanded);
+      if (expanded) refreshCompactHud();
+      scheduleCompactRefresh();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !dynamicIsland.classList.contains('is-expanded')) return;
+      dynamicIsland.classList.remove('is-expanded');
+      compactHudToggle.setAttribute('aria-expanded', 'false');
+      compactHudDrawer.setAttribute('aria-hidden', 'true');
+      window.starlightDesktop?.setExpanded?.(false);
+      compactHudToggle.focus();
+    });
+  }
+
+  refreshCompactHud().finally(scheduleCompactRefresh);
+  document.addEventListener('visibilitychange', scheduleCompactRefresh);
 
   // Setup Skin Picker Buttons
   document.querySelectorAll('.skin-btn').forEach(btn => {
@@ -203,6 +244,124 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sessionsList) {
       renderSessions(state.activeSessions);
     }
+  }
+
+  async function refreshCompactHud() {
+    if (compactRefreshInFlight) return;
+    compactRefreshInFlight = true;
+    try {
+      const response = await fetch('/api/hud/compact', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Compact HUD returned ${response.status}`);
+      renderCompactHud(await response.json());
+    } catch {
+      renderCompactUnavailable();
+    } finally {
+      compactRefreshInFlight = false;
+    }
+  }
+
+  function scheduleCompactRefresh() {
+    if (compactRefreshTimer) window.clearTimeout(compactRefreshTimer);
+    const expanded = dynamicIsland?.classList.contains('is-expanded');
+    const delay = document.hidden ? 300_000 : expanded ? 30_000 : 60_000;
+    compactRefreshTimer = window.setTimeout(async () => {
+      await refreshCompactHud();
+      scheduleCompactRefresh();
+    }, delay);
+  }
+
+  function renderCompactHud(snapshot) {
+    const providers = snapshot?.keyProviders || [];
+    if (compactProviderNames) {
+      compactProviderNames.innerHTML = providers.map((provider) => `
+        <span title="${escapeHtml(provider.label)}">
+          <span class="provider-label-long">${escapeHtml(provider.label)}</span>
+          <span class="provider-label-short">${escapeHtml(provider.shortLabel || provider.label)}</span>
+        </span>
+      `).join('');
+    }
+
+    if (compactProviderValues) {
+      compactProviderValues.innerHTML = providers.map((provider) => {
+        const value = provider.percent == null ? 0 : clampPercent(provider.percent);
+        const statusClass = provider.status === 'critical'
+          ? 'is-critical'
+          : provider.status === 'watch'
+            ? 'is-watch'
+            : provider.basis === 'quota'
+              ? 'is-quota'
+              : provider.basis === 'activity_share'
+                ? 'is-share'
+                : 'is-unavailable';
+        const detail = `${provider.basisLabel} · ${provider.detail}${provider.resetsAt ? ` · resets ${formatReset(provider.resetsAt)}` : ''}`;
+        return `<span class="${statusClass}" style="--metric-value:${value}%" title="${escapeHtml(detail)}" aria-label="${escapeHtml(provider.label)} ${formatPercent(provider.percent)}, ${escapeHtml(provider.basisLabel)}">${formatPercent(provider.percent)}</span>`;
+      }).join('');
+    }
+
+    if (compactObservedAt) {
+      compactObservedAt.textContent = snapshot.observedAt
+        ? `updated ${timeAgo(new Date(snapshot.observedAt).getTime())}`
+        : snapshot.status;
+    }
+
+    const quotas = snapshot?.allQuotas || [];
+    if (compactQuotaList) {
+      compactQuotaList.innerHTML = quotas.length ? quotas.map((quota) => `
+        <div class="compact-detail-row">
+          <div class="compact-detail-name"><strong>${escapeHtml(quota.provider)}</strong> · ${escapeHtml(quota.label)}</div>
+          <div class="compact-detail-value">${formatPercent(quota.usedPercent)} used</div>
+          <div class="compact-detail-meter" role="progressbar" aria-label="${escapeHtml(quota.provider)} ${escapeHtml(quota.label)} usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${clampPercent(quota.usedPercent)}"><span style="width:${clampPercent(quota.usedPercent)}%"></span></div>
+        </div>
+      `).join('') : '<div class="empty-state">No authenticated quota feeds are available.</div>';
+    }
+
+    const models = snapshot?.allModels || [];
+    if (compactModelCount) compactModelCount.textContent = `${models.length} ${models.length === 1 ? 'model' : 'models'}`;
+    if (compactModelList) {
+      compactModelList.innerHTML = models.length ? models.map((model) => `
+        <div class="compact-detail-row">
+          <div class="compact-detail-name"><strong>${escapeHtml(model.label)}</strong> · ${escapeHtml(model.provider || 'unknown')}</div>
+          <div class="compact-detail-value">${formatPercent(model.percent)} · ${formatCompact(model.totalProcessedTokens)}</div>
+          <div class="compact-detail-meter" role="progressbar" aria-label="${escapeHtml(model.label)} token share" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${clampPercent(model.percent)}"><span style="width:${clampPercent(model.percent)}%"></span></div>
+        </div>
+      `).join('') : '<div class="empty-state">No measured model activity today.</div>';
+    }
+
+    renderCommandCenter(snapshot?.commandCenter);
+  }
+
+  function renderCommandCenter(commandCenter) {
+    if (!commandCenter) return;
+    if (compactCommandDot) {
+      compactCommandDot.className = `command-dot is-${commandCenter.status}`;
+    }
+    if (compactCommandTitle) {
+      compactCommandTitle.textContent = commandCenter.status === 'online'
+        ? 'Observatory online'
+        : 'Observatory offline';
+    }
+    if (compactCommandLatency) {
+      compactCommandLatency.textContent = commandCenter.latencyMs == null
+        ? '127.0.0.1:4321'
+        : `${commandCenter.latencyMs} ms · local`;
+    }
+    if (compactCommandRoutes) {
+      compactCommandRoutes.innerHTML = (commandCenter.surfaces || []).map((surface) => `
+        <a class="compact-command-link" href="${escapeHtml(surface.url)}" target="_blank" rel="noopener" title="Open ${escapeHtml(surface.label)} in Starlight Command Center">
+          <strong>${escapeHtml(surface.label)}</strong>
+          <span>${escapeHtml(surface.note)}</span>
+        </a>
+      `).join('');
+    }
+  }
+
+  function renderCompactUnavailable() {
+    if (compactProviderValues) {
+      compactProviderValues.innerHTML = '<span class="is-unavailable">—</span>'.repeat(5);
+    }
+    if (compactObservedAt) compactObservedAt.textContent = 'telemetry unavailable';
+    if (compactCommandDot) compactCommandDot.className = 'command-dot is-offline';
+    if (compactCommandTitle) compactCommandTitle.textContent = 'Bridge unavailable';
   }
 
   function renderUsage(usage) {
@@ -416,16 +575,21 @@ document.addEventListener('DOMContentLoaded', () => {
   function initDraggable(el) {
     if (!el) return;
     let isDragging = false;
+    let didMove = false;
     let startX, startY, origX, origY;
 
     el.addEventListener('mousedown', (e) => {
-      if (e.target.tagName === 'BUTTON') return;
+      const target = e.target;
+      const dragHandle = target.closest?.('.compact-pet-avatar');
+      if (!dragHandle) return;
       isDragging = true;
+      didMove = false;
       startX = e.clientX;
       startY = e.clientY;
       const rect = el.getBoundingClientRect();
       origX = rect.left;
       origY = rect.top;
+      el.classList.add('is-dragging');
       e.preventDefault();
     });
 
@@ -433,14 +597,25 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
-      el.style.left = `${origX + dx}px`;
-      el.style.top = `${origY + dy}px`;
+      if (Math.abs(dx) + Math.abs(dy) > 4) didMove = true;
+      const rect = el.getBoundingClientRect();
+      const nextX = Math.max(8, Math.min(window.innerWidth - rect.width - 8, origX + dx));
+      const nextY = Math.max(8, Math.min(window.innerHeight - 64, origY + dy));
+      el.style.left = `${nextX}px`;
+      el.style.top = `${nextY}px`;
       el.style.right = 'auto';
       el.style.bottom = 'auto';
+      el.style.transform = 'none';
     });
 
     window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
       isDragging = false;
+      el.classList.remove('is-dragging');
+      if (didMove) {
+        el.dataset.justDragged = 'true';
+        window.setTimeout(() => delete el.dataset.justDragged, 0);
+      }
     });
   }
 
@@ -457,6 +632,13 @@ document.addEventListener('DOMContentLoaded', () => {
       notation: number >= 10000 ? 'compact' : 'standard',
       maximumFractionDigits: number >= 10000 ? 2 : 0,
     }).format(number);
+  }
+
+  function formatPercent(value) {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    const number = clampPercent(value);
+    if (number > 0 && number < 0.1) return '≤0.1%';
+    return `${number >= 10 || Number.isInteger(number) ? number.toFixed(0) : number.toFixed(1)}%`;
   }
 
   function clampPercent(value) {

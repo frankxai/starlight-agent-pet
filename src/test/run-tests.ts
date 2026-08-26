@@ -4,6 +4,8 @@ import { ClaudeParser } from '../engine/parsers/claude';
 import { AntigravityParser } from '../engine/parsers/antigravity';
 import { TokenUsage } from '../engine/types';
 import { normalizeTokscaleDailyReport, normalizeTokscaleQuotaReport } from '../engine/usage';
+import { buildKeyProviderMetrics } from '../engine/compact-hud';
+import { CommandCenterBridge } from '../engine/command-center';
 
 process.env.STARLIGHT_DISABLE_TOKSCALE = '1';
 
@@ -289,6 +291,56 @@ async function runTests() {
   assert(quotas.length === 2, 'Provider quota windows are normalized');
   assert(quotas[0].remainingPercent === 72, `Remaining quota is calculated (${quotas[0].remainingPercent}%)`);
   assert(!JSON.stringify(quotas).includes('must-not-leak'), 'Account emails are removed from the public usage contract');
+
+  // 10. Test compact HUD projection and command-center bridge
+  console.log('\n10. Testing Compact Subscription HUD...');
+  const compactUsage = {
+    ...dailyUsage,
+    status: 'ready' as const,
+    source: 'tokscale' as const,
+    sourceLabel: 'Tokscale · test fixture',
+    quotas,
+    byHarness: [
+      ...dailyUsage.byHarness,
+      {
+        id: 'antigravity-cli', label: 'antigravity-cli', provider: 'google',
+        totalProcessedTokens: 10, freshInputTokens: 8, outputTokens: 2,
+        cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0,
+        messageCount: 1, apiEquivalentCostUSD: 0, percent: 1,
+      },
+    ],
+    byModel: [
+      ...dailyUsage.byModel,
+      {
+        id: 'xai_oauth:grok-4.6', label: 'grok-4.6', provider: 'xai_oauth',
+        totalProcessedTokens: 50, freshInputTokens: 10, outputTokens: 5,
+        cacheReadTokens: 35, cacheWriteTokens: 0, reasoningTokens: 0,
+        messageCount: 1, apiEquivalentCostUSD: 0, percent: 5,
+      },
+      {
+        id: 'opencode_free:hy3-free', label: 'hy3-free', provider: 'opencode_free',
+        totalProcessedTokens: 25, freshInputTokens: 5, outputTokens: 2,
+        cacheReadTokens: 18, cacheWriteTokens: 0, reasoningTokens: 0,
+        messageCount: 1, apiEquivalentCostUSD: 0, percent: 2.5,
+      },
+    ],
+  };
+  const keyProviders = buildKeyProviderMetrics(compactUsage);
+  assert(keyProviders.length === 5, 'Compact HUD always returns the five canonical provider cells');
+  assert(keyProviders.find(metric => metric.id === 'codex')?.percent === 25, 'Codex cell prefers authenticated quota usage');
+  assert(keyProviders.find(metric => metric.id === 'claude')?.basis === 'quota', 'Claude cell is explicitly labeled as subscription quota');
+  assert(keyProviders.find(metric => metric.id === 'grok')?.percent === 5, 'Grok falls back to measured activity share when no quota feed exists');
+  assert(keyProviders.find(metric => metric.id === 'opencode')?.basis === 'activity_share', 'OpenCode never presents activity share as subscription quota');
+
+  let probeCalls = 0;
+  const commandCenter = new CommandCenterBridge(async () => {
+    probeCalls++;
+    return { online: true, latencyMs: 12 };
+  }, 15_000, () => Date.parse('2026-08-26T12:00:00Z'));
+  const firstCommandSnapshot = await commandCenter.getSnapshot();
+  const secondCommandSnapshot = await commandCenter.getSnapshot();
+  assert(firstCommandSnapshot.status === 'online' && firstCommandSnapshot.surfaces.length === 5, 'Command Center bridge exposes fixed read-only surfaces');
+  assert(secondCommandSnapshot.latencyMs === 12 && probeCalls === 1, 'Command Center health probe is cached instead of polling on every render');
 
   // Clean up
   if (fs.existsSync(testDbPath)) {

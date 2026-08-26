@@ -8,25 +8,81 @@
 </head>
 <body>
 
-  <!-- Dynamic Island Top Bar -->
-  <div id="dynamic-island" class="dynamic-island">
-    <div class="pulse-dot"></div>
-    <div id="island-status" style="font-size: 13px; font-weight: 600; color: #fff;">Scanning Fleet...</div>
-    <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
-    <div id="island-velocity" style="font-size: 12px; font-family: var(--font-mono); color: var(--cyan-glow);">0 tok/s</div>
-  </div>
+  <!-- Always-available two-row subscription HUD -->
+  <aside id="floating-pet-container" class="compact-hud-shell" aria-label="Starlight compact usage HUD">
+    <div id="dynamic-island" class="compact-hud glass-panel">
+      <button id="compact-hud-toggle" class="compact-hud-summary" type="button" aria-expanded="false" aria-controls="compact-hud-drawer">
+        <span class="compact-pet-avatar" aria-hidden="true">
+          <canvas id="pet-canvas"></canvas>
+          <span class="compact-live-dot"></span>
+        </span>
 
-  <!-- Floating Desktop Pet Widget -->
-  <div id="floating-pet-container">
-    <div id="pet-bubble" class="pet-bubble">All agent fleets nominal</div>
-    <div class="pet-canvas-wrap">
-      <canvas id="pet-canvas"></canvas>
+        <span class="compact-provider-matrix" aria-label="Key provider usage percentages">
+          <span id="compact-provider-names" class="compact-provider-row compact-provider-names">
+            <span>Codex</span><span>Claude</span><span>Grok</span><span>AntiG</span><span>Open</span>
+          </span>
+          <span id="compact-provider-values" class="compact-provider-row compact-provider-values">
+            <span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>
+          </span>
+        </span>
+
+        <span class="compact-hud-state">
+          <span id="island-status">SYNCING</span>
+          <span id="island-velocity">0 tok/s</span>
+        </span>
+        <span class="compact-chevron" aria-hidden="true">⌃</span>
+      </button>
+
+      <section id="compact-hud-drawer" class="compact-hud-drawer" aria-hidden="true" aria-label="Expanded Starlight usage details">
+        <header class="compact-drawer-header">
+          <div>
+            <span class="eyebrow">CONSTELLATION PULSE</span>
+            <h2>Limits, activity & command</h2>
+          </div>
+          <div class="compact-legend" aria-label="Percentage legend">
+            <span><i class="legend-quota"></i>limit used</span>
+            <span><i class="legend-share"></i>token share</span>
+          </div>
+        </header>
+
+        <div class="compact-drawer-grid">
+          <section class="compact-drawer-panel" aria-labelledby="compact-limits-title">
+            <div class="compact-panel-title">
+              <div><span class="eyebrow">SUBSCRIPTIONS</span><h3 id="compact-limits-title">All limit windows</h3></div>
+              <span id="compact-observed-at" class="micro-stat">syncing</span>
+            </div>
+            <div id="compact-quota-list" class="compact-detail-list"><div class="empty-state">Reading quota windows…</div></div>
+          </section>
+
+          <section class="compact-drawer-panel" aria-labelledby="compact-models-title">
+            <div class="compact-panel-title">
+              <div><span class="eyebrow">ALL LLMS</span><h3 id="compact-models-title">Measured model activity</h3></div>
+              <span id="compact-model-count" class="micro-stat">— models</span>
+            </div>
+            <div id="compact-model-list" class="compact-detail-list"><div class="empty-state">Reading model activity…</div></div>
+          </section>
+        </div>
+
+        <section class="compact-command-panel" aria-labelledby="compact-command-title">
+          <div class="compact-command-status">
+            <span id="compact-command-dot" class="command-dot is-checking"></span>
+            <div>
+              <span class="eyebrow">STARLIGHT COMMAND CENTER</span>
+              <h3 id="compact-command-title">Checking Observatory…</h3>
+            </div>
+            <span id="compact-command-latency" class="micro-stat">127.0.0.1:4321</span>
+          </div>
+          <nav id="compact-command-routes" class="compact-command-routes" aria-label="Command Center destinations"></nav>
+        </section>
+
+        <footer class="compact-drawer-footer">
+          <span id="pet-bubble">All agent fleets nominal</span>
+          <span id="pet-status-text">IDLE • 0 tok/s</span>
+          <a class="compact-text-link" href="/?mode=compact" target="_blank" rel="noopener">Detach mini HUD ↗</a>
+        </footer>
+      </section>
     </div>
-    <div class="pet-status-pill">
-      <div class="pulse-dot"></div>
-      <span id="pet-status-text">IDLE • 0 tok/s</span>
-    </div>
-  </div>
+  </aside>
 
   <!-- Main Observatory HUD -->
   <div class="hud-container">

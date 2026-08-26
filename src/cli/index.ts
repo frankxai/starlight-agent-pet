@@ -42,6 +42,20 @@ export async function runCli(args: string[]) {
       break;
     }
 
+    case 'mini':
+    case 'compact': {
+      console.log('\x1b[1m\x1b[36m[+] Launching Starlight Constellation mini HUD...\x1b[0m');
+      const watcher = new FileSystemWatcher(aggregator);
+      watcher.start();
+      const server = new TelemetryServer(aggregator);
+      const port = await server.start();
+      const url = `http://localhost:${port}/?mode=compact`;
+
+      console.log(`[+] Compact usage HUD available at: ${url}`);
+      openBrowser(url);
+      break;
+    }
+
     case 'daemon': {
       console.log('\x1b[1m\x1b[35m[+] Starting Starlight Fleet Telemetry Daemon...\x1b[0m');
       const watcher = new FileSystemWatcher(aggregator);
@@ -100,6 +114,7 @@ Commands:
   \x1b[36mstarlight-pet status\x1b[0m         View live fleet status and pet mood in terminal
   \x1b[36mstarlight-pet prompt\x1b[0m         One-line statusline string for shell prompts
   \x1b[36mstarlight-pet hud\x1b[0m            Launch interactive floating pet and full Observatory HUD
+  \x1b[36mstarlight-pet mini\x1b[0m           Launch the two-row provider HUD with expandable details
   \x1b[36mstarlight-pet daemon\x1b[0m         Run background telemetry bridge server (port 9224)
   \x1b[36mstarlight-pet skin <name>\x1b[0m    Switch pet skin (stellaris | arcanea_luminor | cyber_bot | kuro_neko | starlight_queen)
   \x1b[36mstarlight-pet sync\x1b[0m           Export multi-machine telemetry snapshot

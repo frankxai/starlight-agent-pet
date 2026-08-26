@@ -52,7 +52,13 @@ It absorbs the best token calculation algorithms from **`ccusage`** and **`toksc
    - Labels cost as an **API-equivalent estimate** unless a provider source explicitly reports actual billed cost. Subscription and bundled-plan charges can differ.
    - Never substitutes fixed synthetic token values when a usage source is unavailable.
 
-6. **Shell Statusline & Multi-Machine Sync**
+7. **Constellation Mini HUD + Command Center Bridge**
+   - A draggable two-row rail keeps Codex, Claude, Grok, Antigravity, and OpenCode visible without opening the full dashboard.
+   - Codex and Claude show authenticated subscription-limit usage when available. Providers without a quota feed show today's measured token share and are labeled differently so the percentages are never conflated.
+   - Expands in place to every detected model, every quota window, and fixed read-only routes into the local Starlight Command Center at `127.0.0.1:4321`.
+   - `?mode=compact` is a shell-neutral surface for a browser panel today and a transparent Tauri/Electron host later.
+
+8. **Shell Statusline & Multi-Machine Sync**
    - `starlight-pet prompt`: Compact one-line statusline for PowerShell `$PROFILE`, Bash `.bashrc`, Zsh, or Starship.
    - `starlight-pet sync`: Snapshots telemetry for multi-machine synchronization (`@frank-desktop` and `@yoga-c940`).
 
@@ -83,6 +89,14 @@ node bin/starlight-pet.js hud
 
 The usage cockpit enriches the local parsers with the installed `tokscale` CLI. If Tokscale is unavailable, session presence remains visible while measured daily totals and quota cards fail closed as unavailable.
 
+### 4. Launch the lightweight two-row view
+
+```bash
+node bin/starlight-pet.js mini
+```
+
+The mini HUD uses the same loopback telemetry contract as the full Observatory. Click it to reveal all detected LLMs, detailed quota windows, and the Starlight Command Center destinations.
+
 ### 4. Install Drop-in Claude Code Hooks
 ```powershell
 # On Windows PowerShell:
@@ -98,6 +112,7 @@ The usage cockpit enriches the local parsers with the installed `tokscale` CLI. 
 | `starlight-pet status` | Quick terminal dashboard with ASCII pet art and live metrics |
 | `starlight-pet prompt` | Compact one-line ANSI string for shell prompt statuslines |
 | `starlight-pet hud` | Launches background server and opens the full interactive HUD |
+| `starlight-pet mini` | Opens the two-row key-provider HUD with expandable all-model details |
 | `starlight-pet daemon` | Runs the telemetry daemon and file watcher on port `9224` |
 | `starlight-pet skin <name>` | Switches pet companion skin (`stellaris`, `arcanea_luminor`, `cyber_bot`, `kuro_neko`, `starlight_queen`) |
 | `starlight-pet sync` | Exports multi-machine telemetry snapshot |
@@ -112,6 +127,17 @@ The usage cockpit enriches the local parsers with the installed `tokscale` CLI. 
 - **Local-First & Sovereign**: 100% of telemetry parsing and file watching happens locally on your machine.
 - **Zero Sensitive Data Leakage**: Session transcripts and file paths are never uploaded to any external server.
 - **Estate Standard**: Follows Starlight Estate SSOT rules (`WORKSPACE_MAP.md`).
+
+### OSS composition strategy
+
+Starlight keeps one small local interface and composes proven OSS behavior behind it:
+
+- [Tokscale](https://github.com/junhoyeo/tokscale) is the active multi-harness token, model, cost, and quota adapter.
+- [ccusage](https://github.com/ccusage/ccusage) informs the normalized local-report contract and remains a compatible future fallback rather than a second hot-path scanner.
+- [CodexBar](https://github.com/steipete/CodexBar) informs the compact provider rail, explicit stale/error states, reset-aware quota presentation, and adaptive-refresh posture.
+- [Tauri v2](https://v2.tauri.app/) remains the target lightweight native shell. The web surface and fixed loopback interfaces do not depend on the shell, so the current transparent Electron host can be replaced without rewriting telemetry or UI behavior.
+
+The project consumes stable JSON or loopback interfaces instead of copying provider credential logic or coupling the HUD to another project's internal data structures.
 
 ---
 
