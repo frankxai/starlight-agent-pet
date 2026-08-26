@@ -114,6 +114,94 @@ async function runTests() {
   const queenState = await aggregator.getFleetState();
   assert(queenState.pet.skin === 'starlight_queen', 'Pet skin switched to starlight_queen');
 
+  // 7. Test Inference Router
+  console.log('\n7. Testing Inference Router...');
+  const { InferenceRouter } = await import('../engine/router');
+  const router = new InferenceRouter();
+
+  // 7a. Code generation task should select a code-strong model
+  const codeRoute = router.route({
+    taskShape: 'code_generation',
+    contextTokensUsed: 50_000,
+    contextTokensMax: 200_000,
+    budgetRemainingUSD: 10.0,
+    dailyBudgetCapUSD: 50.0,
+    preferLocal: false,
+    requiresVision: false,
+    requiresExtendedThinking: false,
+  });
+  assert(codeRoute.selectedModel.strengths.includes('code_generation'),
+    `Code task routed to ${codeRoute.selectedModel.displayName} (has code_generation strength)`);
+  assert(codeRoute.selectedModel.tier === 'free',
+    `Router prefers free tier first: ${codeRoute.selectedModel.tier}`);
+
+  // 7b. Budget exhausted → must select free or local
+  const brokeRoute = router.route({
+    taskShape: 'deep_reasoning',
+    contextTokensUsed: 50_000,
+    contextTokensMax: 200_000,
+    budgetRemainingUSD: 0,
+    dailyBudgetCapUSD: 0,
+    preferLocal: false,
+    requiresVision: false,
+    requiresExtendedThinking: false,
+  });
+  assert(
+    brokeRoute.selectedModel.tier === 'free' || brokeRoute.selectedModel.tier === 'local',
+    `Budget exhausted → routed to ${brokeRoute.selectedModel.tier} tier: ${brokeRoute.selectedModel.displayName}`
+  );
+
+  // 7c. Cross-model verification: maker ≠ checker
+  const verifyRoute = router.route({
+    taskShape: 'code_review',
+    contextTokensUsed: 30_000,
+    contextTokensMax: 200_000,
+    budgetRemainingUSD: 20.0,
+    dailyBudgetCapUSD: 50.0,
+    preferLocal: false,
+    requiresVision: false,
+    requiresExtendedThinking: false,
+    previousModelId: 'claude-3-7-sonnet-20250219', // Claude was the maker
+  });
+  assert(verifyRoute.crossModelVerifier !== undefined,
+    `Cross-model verifier assigned: ${verifyRoute.crossModelVerifier?.displayName}`);
+  assert(verifyRoute.crossModelVerifier?.provider !== 'anthropic',
+    `Verifier is NOT same provider as maker (${verifyRoute.crossModelVerifier?.provider} ≠ anthropic)`);
+
+  // 7d. Vision required → filters to vision-capable models
+  const visionRoute = router.route({
+    taskShape: 'creative_media',
+    contextTokensUsed: 10_000,
+    contextTokensMax: 200_000,
+    budgetRemainingUSD: 10.0,
+    dailyBudgetCapUSD: 50.0,
+    preferLocal: false,
+    requiresVision: true,
+    requiresExtendedThinking: false,
+  });
+  assert(visionRoute.selectedModel.supportsVision === true,
+    `Vision task routed to vision-capable model: ${visionRoute.selectedModel.displayName}`);
+
+  // 7e. Local preference → selects local model
+  const localRoute = router.route({
+    taskShape: 'local_private',
+    contextTokensUsed: 10_000,
+    contextTokensMax: 200_000,
+    budgetRemainingUSD: 10.0,
+    dailyBudgetCapUSD: 50.0,
+    preferLocal: true,
+    requiresVision: false,
+    requiresExtendedThinking: false,
+  });
+  assert(localRoute.selectedModel.isLocal === true,
+    `Local-prefer routed to local model: ${localRoute.selectedModel.displayName}`);
+
+  // 7f. Registry completeness
+  const registry = router.getRegistry();
+  assert(registry.length >= 13, `Model registry contains ${registry.length} models (≥13 expected)`);
+  const providers = new Set(registry.map(m => m.provider));
+  assert(providers.size >= 7, `Registry spans ${providers.size} providers (≥7 expected: anthropic, google, openai, xai, deepseek, kilo, groq, ollama, nvidia)`);
+
   console.log(`\n--- TEST RESULTS: ${passed} PASSED, ${failed} FAILED ---\n`);
   if (failed > 0) process.exit(1);
 }
