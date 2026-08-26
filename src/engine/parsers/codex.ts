@@ -6,6 +6,7 @@ import { calculateCost } from '../pricing';
 
 export class CodexParser {
   private codexDir: string;
+  private rolloutCache = new Map<string, { mtimeMs: number; snapshot: CodexRolloutSnapshot | null }>();
 
   constructor() {
     const home = os.homedir();
@@ -26,7 +27,7 @@ export class CodexParser {
         const db = new Database(dbPath, { readonly: true, timeout: 2000 });
 
         const rows = db.prepare(`
-          SELECT id, cwd, title, tokens_used, created_at, updated_at,
+          SELECT id, cwd, title, tokens_used, created_at, updated_at, rollout_path,
                  model, git_branch, agent_role, agent_nickname, memory_mode, archived
           FROM threads
           WHERE archived = 0
@@ -36,22 +37,36 @@ export class CodexParser {
 
         for (const row of rows) {
           const model = row.model || 'gpt-5.6-sol';
-          // Codex state_5.sqlite doesn't break down tokens well, so we just use total tokens
-          const tokens: TokenUsage = {
+          const rollout = this.readLatestRolloutSnapshot(row.rollout_path);
+          const totalUsage = rollout?.totalUsage;
+          const cachedInput = Number(totalUsage?.cached_input_tokens || 0);
+          const reportedInput = Number(totalUsage?.input_tokens || 0);
+          const output = Number(totalUsage?.output_tokens || 0);
+          const tokens: TokenUsage = rollout ? {
+            inputTokens: Math.max(0, reportedInput - cachedInput),
+            outputTokens: output,
+            cacheCreationTokens: 0,
+            cacheReadTokens: cachedInput,
+            thinkingTokens: Number(totalUsage?.reasoning_output_tokens || 0),
+            totalTokens: Number(totalUsage?.total_tokens || (reportedInput + output)),
+          } : {
             inputTokens: 0,
             outputTokens: 0,
             cacheCreationTokens: 0,
             cacheReadTokens: 0,
             thinkingTokens: 0,
-            totalTokens: row.tokens_used || 0
+            totalTokens: Number(row.tokens_used || 0),
           };
 
           const cost = calculateCost(tokens, model);
-          const maxContext = 256000;
-          const usedPct = Math.round((tokens.totalTokens / maxContext) * 100);
+          const lastUsage = rollout?.lastUsage;
+          const contextUsed = Number(lastUsage?.total_tokens || 0);
+          const maxContext = Number(rollout?.modelContextWindow || 256000);
+          const usedPct = Math.min(100, Math.round((contextUsed / maxContext) * 100));
 
           const context: ContextWindowHealth = {
-            usedTokens: tokens.totalTokens,
+            known: Boolean(rollout?.lastUsage),
+            usedTokens: contextUsed,
             maxTokens: maxContext,
             usedPercentage: usedPct,
             remainingPercentage: Math.max(0, 100 - usedPct),
@@ -92,7 +107,9 @@ export class CodexParser {
             lastActiveAt,
             tokenVelocity: isRecent ? 42 : 0,
             machineTag: '@frank-desktop',
-            gitBranch: row.git_branch || 'agent/codex'
+            gitBranch: row.git_branch || 'agent/codex',
+            usageAccuracy: rollout ? 'measured' : 'unavailable',
+            costBasis: rollout ? 'api_equivalent' : 'unavailable',
           });
         }
         db.close();
@@ -127,12 +144,12 @@ export class CodexParser {
 
             const model = 'gpt-5.6-sol';
             const tokens: TokenUsage = {
-              inputTokens: 45000,
-              outputTokens: 8200,
-              cacheCreationTokens: 12000,
-              cacheReadTokens: 38000,
-              thinkingTokens: 2500,
-              totalTokens: 103200
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheCreationTokens: 0,
+              cacheReadTokens: 0,
+              thinkingTokens: 0,
+              totalTokens: 0,
             };
 
             const cost = calculateCost(tokens, model);
@@ -140,9 +157,10 @@ export class CodexParser {
             const usedPct = Math.round((tokens.totalTokens / maxContext) * 100);
 
             const context: ContextWindowHealth = {
+              known: false,
               usedTokens: tokens.totalTokens,
               maxTokens: maxContext,
-              usedPercentage: usedPct,
+              usedPercentage: 0,
               remainingPercentage: 100 - usedPct,
               isNearCompaction: false,
               warningLevel: 'healthy'
@@ -159,7 +177,7 @@ export class CodexParser {
               workspacePath: ws,
               model,
               modelDisplayName: 'GPT-5.6 Sol',
-              currentTask: 'Codex Swarm Architecture Execution',
+              currentTask: 'Codex workspace detected — usage details unavailable',
               state: agentState,
               subagentCount: 1,
               tokens,
@@ -167,9 +185,11 @@ export class CodexParser {
               context,
               startedAt: lastActiveAt - 3600_000,
               lastActiveAt,
-              tokenVelocity: isRecent ? 42 : 0,
+              tokenVelocity: 0,
               machineTag: '@frank-desktop',
-              gitBranch: 'agent/codex/feature'
+              gitBranch: 'agent/codex/feature',
+              usageAccuracy: 'unavailable',
+              costBasis: 'unavailable',
             });
           }
         }
@@ -180,4 +200,51 @@ export class CodexParser {
 
     return sessions;
   }
+
+  private readLatestRolloutSnapshot(filePath?: string): CodexRolloutSnapshot | null {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    try {
+      const mtimeMs = fs.statSync(filePath).mtimeMs;
+      const cached = this.rolloutCache.get(filePath);
+      if (cached?.mtimeMs === mtimeMs) return cached.snapshot;
+
+      const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+      let snapshot: CodexRolloutSnapshot | null = null;
+      for (let index = lines.length - 1; index >= 0; index--) {
+        const line = lines[index].trim();
+        if (!line) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'event_msg' && event.payload?.type === 'token_count' && event.payload?.info) {
+            snapshot = {
+              totalUsage: event.payload.info.total_token_usage,
+              lastUsage: event.payload.info.last_token_usage,
+              modelContextWindow: event.payload.info.model_context_window,
+            };
+            break;
+          }
+        } catch {
+          // Ignore truncated rollout lines.
+        }
+      }
+      this.rolloutCache.set(filePath, { mtimeMs, snapshot });
+      return snapshot;
+    } catch {
+      return null;
+    }
+  }
+}
+
+interface CodexTokenCounter {
+  input_tokens?: number;
+  cached_input_tokens?: number;
+  output_tokens?: number;
+  reasoning_output_tokens?: number;
+  total_tokens?: number;
+}
+
+interface CodexRolloutSnapshot {
+  totalUsage?: CodexTokenCounter;
+  lastUsage?: CodexTokenCounter;
+  modelContextWindow?: number;
 }

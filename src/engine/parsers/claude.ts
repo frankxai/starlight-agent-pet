@@ -211,6 +211,8 @@ export class ClaudeParser {
         tokenVelocity,
         machineTag: '@frank-desktop',
         gitBranch,
+        usageAccuracy: 'measured',
+        costBasis: 'api_equivalent',
       };
     } catch {
       return null;
@@ -236,6 +238,7 @@ export class ClaudeParser {
         else if (usedPct >= 50) warningLevel = 'moderate';
 
         return {
+          known: true,
           usedTokens,
           maxTokens,
           usedPercentage: usedPct,
@@ -249,6 +252,7 @@ export class ClaudeParser {
     }
 
     return {
+      known: false,
       usedTokens: 0,
       maxTokens,
       usedPercentage: 0,

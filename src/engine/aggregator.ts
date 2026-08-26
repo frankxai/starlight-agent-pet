@@ -15,6 +15,7 @@ import {
 } from './types';
 import { calculateCost, calculateSavings } from './pricing';
 import { HistoricalAnalytics, AnalyticsRecord } from './analytics';
+import { UsageIntelligence } from './usage';
 
 export class FleetAggregator {
   private claudeParser = new ClaudeParser();
@@ -30,10 +31,14 @@ export class FleetAggregator {
   private serverStartTime = Date.now();
   
   public analytics = new HistoricalAnalytics();
+  public usageIntelligence: UsageIntelligence;
   private lastCheckedDate: string;
 
   constructor() {
     this.lastCheckedDate = new Date().toISOString().split('T')[0];
+    const usageEnabled = process.env.STARLIGHT_DISABLE_TOKSCALE !== '1';
+    this.usageIntelligence = new UsageIntelligence(undefined, usageEnabled);
+    this.usageIntelligence.start();
   }
   public setPetSkin(skin: PetSkinId) {
     this.currentPetSkin = skin;
@@ -117,6 +122,7 @@ export class FleetAggregator {
     if (payload.contextRemainingPct !== undefined) {
       const usedPct = Math.round(100 - payload.contextRemainingPct);
       existing.context.usedPercentage = usedPct;
+      existing.context.known = true;
       existing.context.remainingPercentage = payload.contextRemainingPct;
       existing.context.isNearCompaction = usedPct >= 80;
       existing.context.warningLevel = usedPct >= 85 ? 'critical' : usedPct >= 70 ? 'high' : 'healthy';
@@ -177,6 +183,7 @@ export class FleetAggregator {
 
     const sessions = Array.from(this.liveSessions.values())
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    const consolidatedUsage = this.usageIntelligence.getSnapshot();
 
     // 2. Compute Fleet-wide Metrics
     let totalTokens = 0;
@@ -244,16 +251,42 @@ export class FleetAggregator {
     }
 
     const todayDate = new Date().toISOString().split('T')[0];
+    const hasMeasuredToday = Boolean(consolidatedUsage.observedAt) && consolidatedUsage.status !== 'unavailable';
+    const todayTokensByHarness = { ...tokensByHarness };
+    const todayCostByHarness = { ...costByHarness };
+    const todayTokensByModel: Record<string, number> = {};
+    const todayCostByModel: Record<string, number> = {};
+
+    if (hasMeasuredToday) {
+      for (const key of Object.keys(todayTokensByHarness) as AgentHarness[]) {
+        todayTokensByHarness[key] = 0;
+        todayCostByHarness[key] = 0;
+      }
+      for (const share of consolidatedUsage.byHarness) {
+        const harness = (share.id in todayTokensByHarness ? share.id : 'custom') as AgentHarness;
+        todayTokensByHarness[harness] += share.totalProcessedTokens;
+        todayCostByHarness[harness] += share.apiEquivalentCostUSD;
+      }
+      for (const share of consolidatedUsage.byModel) {
+        todayTokensByModel[share.label] = share.totalProcessedTokens;
+        todayCostByModel[share.label] = share.apiEquivalentCostUSD;
+      }
+    }
+
     const todaySummary: DailyUsageSummary = {
       date: todayDate,
-      totalTokens,
-      totalCostUSD: Number(totalCostUSD.toFixed(4)),
-      totalSavingsUSD: Number(totalSavingsUSD.toFixed(4)),
+      totalTokens: hasMeasuredToday ? consolidatedUsage.totals.totalProcessedTokens : 0,
+      totalCostUSD: hasMeasuredToday ? consolidatedUsage.cost.apiEquivalentUSD : 0,
+      totalSavingsUSD: 0,
       sessionsCount: sessions.length,
-      tokensByHarness,
-      costByHarness,
-      tokensByModel,
-      costByModel
+      tokensByHarness: hasMeasuredToday ? todayTokensByHarness : {
+        claude: 0, antigravity: 0, codex: 0, hermes: 0, grok: 0, kilo: 0, opencode: 0, custom: 0,
+      },
+      costByHarness: hasMeasuredToday ? todayCostByHarness : {
+        claude: 0, antigravity: 0, codex: 0, hermes: 0, grok: 0, kilo: 0, opencode: 0, custom: 0,
+      },
+      tokensByModel: hasMeasuredToday ? todayTokensByModel : {},
+      costByModel: hasMeasuredToday ? todayCostByModel : {}
     };
 
     if (this.lastCheckedDate && this.lastCheckedDate !== todayDate) {
@@ -262,7 +295,8 @@ export class FleetAggregator {
     }
 
     // Calculate Arcanea Ten Gates XP and progression
-    const petProgression = this.calculatePetProgression(totalTokens, sessions.length);
+    const activeSessionCount = sessions.filter(s => (now - s.lastActiveAt) < 300_000).length;
+    const petProgression = this.calculatePetProgression(todaySummary.totalTokens, activeSessionCount);
 
     // Active pending permissions
     const pending = Array.from(this.pendingPermissions.values())
@@ -274,6 +308,7 @@ export class FleetAggregator {
 
     return {
       activeSessions: sessions.slice(0, 25),
+      activeSessionCount,
       pendingPermissions: pending,
       historicalSummary: {
         today: todaySummary,
@@ -300,7 +335,8 @@ export class FleetAggregator {
         serverUptimeSeconds: Math.round((Date.now() - this.serverStartTime) / 1000),
         lastPolledAt: Date.now(),
         activeHarnesses
-      }
+      },
+      usageIntelligence: consolidatedUsage,
     };
   }
 
@@ -423,6 +459,7 @@ export class FleetAggregator {
         totalUncachedCostUSD: 0
       },
       context: {
+        known: false,
         usedTokens: 0,
         maxTokens: 200000,
         usedPercentage: 0,

@@ -18,11 +18,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const islandVelocity = document.getElementById('island-velocity');
 
   // Metrics
-  const metricTodayCost = document.getElementById('metric-today-cost');
-  const metricTodayTokens = document.getElementById('metric-today-tokens');
-  const metricVelocity = document.getElementById('metric-velocity');
-  const metricActiveSessions = document.getElementById('metric-active-sessions');
-  const metricSavings = document.getElementById('metric-savings');
+  const metricProcessedTokens = document.getElementById('metric-processed-tokens');
+  const metricFreshTokens = document.getElementById('metric-fresh-tokens');
+  const metricFreshPercent = document.getElementById('metric-fresh-percent');
+  const metricCachePercent = document.getElementById('metric-cache-percent');
+  const metricCacheTokens = document.getElementById('metric-cache-tokens');
+  const metricApiCost = document.getElementById('metric-api-cost');
+  const metricCostBasis = document.getElementById('metric-cost-basis');
+  const metricMessageCount = document.getElementById('metric-message-count');
+  const usageObservedAt = document.getElementById('usage-observed-at');
+  const usageSourceBadge = document.getElementById('usage-source-badge');
+  const compositionBar = document.getElementById('token-composition-bar');
+  const compositionLegend = document.getElementById('token-composition-legend');
+  const quotaList = document.getElementById('quota-list');
+  const harnessShareList = document.getElementById('harness-share-list');
+  const modelShareList = document.getElementById('model-share-list');
   const sessionsList = document.getElementById('sessions-list');
   const permissionsContainer = document.getElementById('permissions-container');
 
@@ -164,23 +174,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Update Dynamic Island
     if (islandStatus) {
-      islandStatus.textContent = `${state.activeSessions.length} Active Fleet • ${state.overallState.toUpperCase()}`;
+      islandStatus.textContent = `${state.activeSessionCount ?? state.activeSessions.length} Active • ${state.overallState.toUpperCase()}`;
     }
     if (islandVelocity) {
       islandVelocity.textContent = `${state.currentFleetVelocity} tok/s`;
     }
 
-    // 4. Update Metrics
-    const today = state.historicalSummary?.today;
-    if (today) {
-      if (metricTodayCost) metricTodayCost.textContent = `$${today.totalCostUSD.toFixed(4)}`;
-      if (metricTodayTokens) metricTodayTokens.textContent = today.totalTokens.toLocaleString();
-    }
-    if (metricVelocity) metricVelocity.textContent = `${state.currentFleetVelocity} tok/s`;
-    if (metricActiveSessions) metricActiveSessions.textContent = state.activeSessions.length.toString();
-    if (metricSavings && state.historicalSummary) {
-      metricSavings.textContent = `$${(state.historicalSummary.totalAllTimeSavingsUSD || 0).toFixed(2)}`;
-    }
+    // 4. Update measured usage intelligence
+    renderUsage(state.usageIntelligence);
 
     // 5. Update Progression & Arcanea Gate
     if (state.pet) {
@@ -202,6 +203,120 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sessionsList) {
       renderSessions(state.activeSessions);
     }
+  }
+
+  function renderUsage(usage) {
+    if (!usage) return;
+    const ready = usage.status === 'ready' || usage.status === 'stale';
+    const totals = usage.totals || {};
+
+    if (usageSourceBadge) {
+      usageSourceBadge.className = `source-badge source-${usage.status || 'loading'}`;
+      const sourceText = usage.status === 'ready'
+        ? 'MEASURED · TOKSCALE'
+        : usage.status === 'stale'
+          ? 'STALE · LAST KNOWN'
+          : usage.status === 'unavailable'
+            ? 'USAGE UNAVAILABLE'
+            : 'SYNCING TOKSCALE';
+      usageSourceBadge.innerHTML = `<span class="source-dot"></span><span>${sourceText}</span>`;
+    }
+
+    if (usageObservedAt) {
+      if (usage.observedAt) {
+        const harnesses = usage.coverage?.measuredHarnesses?.length
+          ? ` · ${usage.coverage.measuredHarnesses.join(', ')}`
+          : '';
+        usageObservedAt.textContent = `Observed ${timeAgo(new Date(usage.observedAt).getTime())} · ${usage.timezone}${harnesses}`;
+      } else {
+        usageObservedAt.textContent = usage.status === 'unavailable'
+          ? 'Tokscale could not read a measured local usage window.'
+          : 'Scanning local harness logs in the background…';
+      }
+    }
+
+    if (!ready) {
+      if (quotaList && usage.quotas?.length) renderQuotas(usage.quotas);
+      return;
+    }
+
+    const freshShare = Math.max(0, 100 - Number(totals.cacheReadPercent || 0));
+    if (metricProcessedTokens) metricProcessedTokens.textContent = formatCompact(totals.totalProcessedTokens);
+    if (metricFreshTokens) metricFreshTokens.textContent = formatCompact(totals.freshProcessedTokens);
+    if (metricFreshPercent) metricFreshPercent.textContent = `${freshShare.toFixed(1)}% new / uncached processing`;
+    if (metricCachePercent) metricCachePercent.textContent = `${Number(totals.cacheReadPercent || 0).toFixed(1)}%`;
+    if (metricCacheTokens) metricCacheTokens.textContent = `${formatCompact(totals.cacheReadTokens)} cache-read tokens`;
+    if (metricApiCost) metricApiCost.textContent = `$${Number(usage.cost?.apiEquivalentUSD || 0).toFixed(2)}`;
+    if (metricCostBasis) metricCostBasis.textContent = usage.cost?.basisLabel || 'API-equivalent estimate';
+    if (metricMessageCount) metricMessageCount.textContent = `${Number(totals.messages || 0).toLocaleString()} messages`;
+
+    renderComposition(totals);
+    renderQuotas(usage.quotas || []);
+    renderShares(harnessShareList, usage.byHarness || [], 7);
+    renderShares(modelShareList, usage.byModel || [], 6);
+  }
+
+  function renderComposition(totals) {
+    if (!compositionBar || !compositionLegend) return;
+    const parts = [
+      { label: 'Fresh input', value: Number(totals.freshInputTokens || 0), percent: Number(totals.freshInputPercent || 0), color: '#00f0ff' },
+      { label: 'Output', value: Number(totals.outputTokens || 0), percent: Number(totals.outputPercent || 0), color: '#a855f7' },
+      { label: 'Cache read', value: Number(totals.cacheReadTokens || 0), percent: Number(totals.cacheReadPercent || 0), color: '#10b981' },
+      { label: 'Cache write', value: Number(totals.cacheWriteTokens || 0), percent: Number(totals.cacheWritePercent || 0), color: '#f59e0b' },
+    ];
+
+    compositionBar.innerHTML = parts
+      .filter(part => part.value > 0)
+      .map(part => `<span class="composition-segment" style="width:${clampPercent(part.percent)}%;background:${part.color}" title="${part.label}: ${part.percent}%"></span>`)
+      .join('');
+    compositionLegend.innerHTML = parts.map(part => `
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:${part.color}"></span>
+        <span>${part.label}</span>
+        <span class="legend-value">${formatCompact(part.value)} · ${part.percent.toFixed(1)}%</span>
+      </div>
+    `).join('');
+  }
+
+  function renderQuotas(quotas) {
+    if (!quotaList) return;
+    if (!quotas?.length) {
+      quotaList.innerHTML = '<div class="empty-state">No authenticated provider quota windows were returned.</div>';
+      return;
+    }
+
+    quotaList.innerHTML = quotas.map(quota => `
+      <div class="quota-row quota-${escapeHtml(quota.status || 'healthy')}">
+        <div class="quota-meta">
+          <span class="quota-name"><strong>${escapeHtml(quota.provider)}</strong> · ${escapeHtml(quota.label)}${quota.plan ? ` · ${escapeHtml(quota.plan)}` : ''}</span>
+          <span class="quota-percent">${Number(quota.usedPercent).toFixed(0)}% used · ${Number(quota.remainingPercent).toFixed(0)}% left</span>
+        </div>
+        <div class="meter-track" role="progressbar" aria-label="${escapeHtml(quota.provider)} ${escapeHtml(quota.label)} usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${clampPercent(quota.usedPercent)}">
+          <div class="meter-fill" style="width:${clampPercent(quota.usedPercent)}%"></div>
+        </div>
+        <div class="quota-reset">${quota.resetsAt ? `Resets ${formatReset(quota.resetsAt)}` : 'Reset time unavailable'}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderShares(container, shares, limit) {
+    if (!container) return;
+    if (!shares?.length) {
+      container.innerHTML = '<div class="empty-state">No measured distribution for this window.</div>';
+      return;
+    }
+
+    container.innerHTML = shares.slice(0, limit).map(share => `
+      <div class="share-row">
+        <div class="share-meta">
+          <span class="share-name"><strong>${escapeHtml(share.label)}</strong>${share.provider ? ` · ${escapeHtml(share.provider)}` : ''}</span>
+          <span class="share-number">${Number(share.percent).toFixed(1)}% · ${formatCompact(share.totalProcessedTokens)}</span>
+        </div>
+        <div class="meter-track" role="progressbar" aria-label="${escapeHtml(share.label)} token share" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${clampPercent(share.percent)}">
+          <div class="meter-fill" style="width:${clampPercent(share.percent)}%"></div>
+        </div>
+      </div>
+    `).join('');
   }
 
   function renderPermissions(perms) {
@@ -246,27 +361,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     sessionsList.innerHTML = sessions.map(s => {
       const isHealthy = s.context.warningLevel === 'healthy';
+      const contextKnown = s.context.known !== false;
       const ctxClass = isHealthy ? 'ctx-healthy' : s.context.warningLevel === 'high' ? 'ctx-high' : 'ctx-critical';
       const harnessClass = `harness-${s.harness}`;
       const activeToolHtml = s.activeTool ? `<div style="font-size: 11px; color: var(--cyan-glow); margin-top: 4px;">⚡ Tool: <strong>${escapeHtml(s.activeTool.name)}</strong> (${escapeHtml(s.activeTool.summary || '')})</div>` : '';
       const savingsHtml = s.savings && s.savings.cacheSavingsUSD > 0 
         ? `<span style="color: var(--emerald-glow); margin-left: 8px;">(Saved: $${s.savings.cacheSavingsUSD.toFixed(3)})</span>` 
         : '';
-      const routingHtml = `<div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1);">Routed via: <strong>${escapeHtml(s.modelDisplayName || s.model)}</strong> ${s.routingReason ? `(${escapeHtml(s.routingReason)})` : '(Auto-selected by active harness)'}</div>`;
+      const accuracy = s.usageAccuracy || 'unavailable';
+      const routingHtml = `<div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1);">Observed on: <strong>${escapeHtml(s.modelDisplayName || s.model)}</strong><span class="accuracy-badge">${escapeHtml(accuracy)}</span></div>`;
 
       return `
         <div class="glass-panel session-card">
           <div class="session-header">
-            <div>
+            <div class="session-model-line">
               <span class="session-harness-badge ${harnessClass}">${s.harness}</span>
-              <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">${escapeHtml(s.modelDisplayName || s.model)}</span>
+              <span class="session-model-name" style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">${escapeHtml(s.modelDisplayName || s.model)}</span>
             </div>
-            <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">${timeAgo(s.lastActiveAt)}</span>
+            <span class="session-time" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">${timeAgo(s.lastActiveAt)}</span>
           </div>
 
           <div>
             <div class="session-proj-name">${escapeHtml(s.projectName)}</div>
-            <div style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px;">Branch: ${escapeHtml(s.gitBranch || 'main')} • ${escapeHtml(s.machineTag || '@frank-desktop')}</div>
+            <div class="session-branch" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px;">Branch: ${escapeHtml(s.gitBranch || 'main')} • ${escapeHtml(s.machineTag || '@frank-desktop')}</div>
           </div>
 
           <div class="session-task">
@@ -279,16 +396,16 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="context-bar-container">
             <div class="context-bar-label">
               <span>Context Saturation</span>
-              <span>${s.context.usedPercentage}% (${s.tokens.totalTokens.toLocaleString()} tok)</span>
+              <span>${contextKnown ? `${s.context.usedPercentage}% (${Number(s.context.usedTokens || 0).toLocaleString()} tok)` : 'Unavailable from harness'}</span>
             </div>
             <div class="context-bar-bg">
-              <div class="context-bar-fill ${ctxClass}" style="width: ${s.context.usedPercentage}%;"></div>
+              <div class="context-bar-fill ${contextKnown ? ctxClass : ''}" style="width: ${contextKnown ? clampPercent(s.context.usedPercentage) : 0}%;"></div>
             </div>
           </div>
 
           <div class="session-stats-row">
             <span>Tokens: <strong>${s.tokens.totalTokens.toLocaleString()}</strong></span>
-            <span>Cost: <strong>$${s.cost.totalCostUSD.toFixed(4)}</strong> ${savingsHtml}</span>
+            <span>Cost: <strong>$${s.cost.totalCostUSD.toFixed(4)}</strong> <span class="accuracy-badge">${escapeHtml(s.costBasis || 'unavailable')}</span> ${savingsHtml}</span>
             <span>State: <strong style="color: var(--cyan-glow);">${s.state.toUpperCase()}</strong></span>
           </div>
         </div>
@@ -332,6 +449,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (s < 60) return `${s}s ago`;
     if (s < 3600) return `${Math.floor(s / 60)}m ago`;
     return `${Math.floor(s / 3600)}h ago`;
+  }
+
+  function formatCompact(value) {
+    const number = Number(value || 0);
+    return new Intl.NumberFormat(undefined, {
+      notation: number >= 10000 ? 'compact' : 'standard',
+      maximumFractionDigits: number >= 10000 ? 2 : 0,
+    }).format(number);
+  }
+
+  function clampPercent(value) {
+    return Math.max(0, Math.min(100, Number(value || 0)));
+  }
+
+  function formatReset(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'at an unknown time';
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   function escapeHtml(str) {

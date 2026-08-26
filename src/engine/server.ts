@@ -14,6 +14,7 @@ export class TelemetryServer {
   private wss: WebSocketServer | null = null;
   private broadcastInterval: NodeJS.Timeout | null = null;
   private publicDir: string;
+  private readonly host = '127.0.0.1';
 
   constructor(aggregator: FleetAggregator, port = 9224) {
     this.aggregator = aggregator;
@@ -59,7 +60,7 @@ export class TelemetryServer {
         this.broadcast();
       }, 1500);
 
-      this.server.listen(this.port, () => {
+      this.server.listen(this.port, this.host, () => {
         console.log(`[Starlight Fleet Observatory] Telemetry Server active at http://localhost:${this.port}`);
         resolve(this.port);
       });
@@ -68,7 +69,7 @@ export class TelemetryServer {
         if (err.code === 'EADDRINUSE') {
           console.warn(`[Starlight Fleet Observatory] Port ${this.port} busy, attempting port ${this.port + 1}...`);
           this.port += 1;
-          this.server?.listen(this.port, () => {
+          this.server?.listen(this.port, this.host, () => {
             console.log(`[Starlight Fleet Observatory] Telemetry Server active at http://localhost:${this.port}`);
             resolve(this.port);
           });
@@ -103,8 +104,12 @@ export class TelemetryServer {
   }
 
   private async handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-    // CORS headers for all responses
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // The HUD is local-only. Permit only same-machine browser origins.
+    const origin = req.headers.origin;
+    if (origin === `http://localhost:${this.port}` || origin === `http://127.0.0.1:${this.port}`) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -122,6 +127,12 @@ export class TelemetryServer {
       const state = await this.aggregator.getFleetState();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(state));
+      return;
+    }
+
+    if (pathname === '/api/usage' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(this.aggregator.usageIntelligence.getSnapshot()));
       return;
     }
 

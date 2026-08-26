@@ -43,8 +43,14 @@ It absorbs the best token calculation algorithms from **`ccusage`** and **`toksc
    - When any agent requests tool permission, an interactive card floats next to the pet with `[Approve]` and `[Deny]` buttons to resolve without switching terminal tabs.
 
 5. **Prompt Cache Savings & Budget Optimizer**
-   - Real-time calculator showing exact dollars saved through Anthropic prompt caching and Gemini context cache hits.
+   - API-equivalent cache economics for supported model pricing; never presented as an invoice or guaranteed cash saving.
    - Context window health radar alerting before auto-compaction.
+
+6. **Measured Usage Intelligence**
+   - Reads Tokscale's local-log report for today's fresh input, output, cache-read, cache-write, message, harness, and model totals.
+   - Displays authenticated provider quota windows when Tokscale exposes them, including used/remaining percentages and reset times.
+   - Labels cost as an **API-equivalent estimate** unless a provider source explicitly reports actual billed cost. Subscription and bundled-plan charges can differ.
+   - Never substitutes fixed synthetic token values when a usage source is unavailable.
 
 6. **Shell Statusline & Multi-Machine Sync**
    - `starlight-pet prompt`: Compact one-line statusline for PowerShell `$PROFILE`, Bash `.bashrc`, Zsh, or Starship.
@@ -74,6 +80,8 @@ node bin/starlight-pet.js status
 node bin/starlight-pet.js hud
 ```
 *Opens `http://localhost:9224` in your default browser with live WebSocket synchronization.*
+
+The usage cockpit enriches the local parsers with the installed `tokscale` CLI. If Tokscale is unavailable, session presence remains visible while measured daily totals and quota cards fail closed as unavailable.
 
 ### 4. Install Drop-in Claude Code Hooks
 ```powershell

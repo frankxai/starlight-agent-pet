@@ -123,6 +123,7 @@ export class AntigravityParser {
 
       const usedPct = Math.min(100, Math.round((totalTokens / maxContextTokens) * 100));
       const context: ContextWindowHealth = {
+        known: false,
         usedTokens: totalTokens,
         maxTokens: maxContextTokens,
         usedPercentage: usedPct,
@@ -163,7 +164,9 @@ export class AntigravityParser {
         lastActiveAt,
         tokenVelocity,
         machineTag: '@frank-desktop',
-        gitBranch: 'main'
+        gitBranch: 'main',
+        usageAccuracy: 'estimated',
+        costBasis: 'api_equivalent',
       };
     } catch {
       return null;

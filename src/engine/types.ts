@@ -51,6 +51,7 @@ export interface SavingsEstimate {
 }
 
 export interface ContextWindowHealth {
+  known?: boolean;
   usedTokens: number;
   maxTokens: number;
   usedPercentage: number;
@@ -99,6 +100,70 @@ export interface AgentSession {
   tokenVelocity: number; // tokens/sec
   machineTag: string; // e.g. @frank-desktop, @yoga-c940
   gitBranch?: string;
+  usageAccuracy?: 'measured' | 'estimated' | 'unavailable';
+  costBasis?: 'actual' | 'api_equivalent' | 'unavailable';
+}
+
+export interface UsageShare {
+  id: string;
+  label: string;
+  provider?: string;
+  totalProcessedTokens: number;
+  freshInputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+  messageCount: number;
+  apiEquivalentCostUSD: number;
+  percent: number;
+}
+
+export interface ProviderQuotaWindow {
+  provider: string;
+  plan?: string;
+  label: string;
+  usedPercent: number;
+  remainingPercent: number;
+  resetsAt?: string;
+  status: 'healthy' | 'watch' | 'critical';
+}
+
+export interface ConsolidatedUsageSnapshot {
+  status: 'loading' | 'ready' | 'stale' | 'unavailable';
+  source: 'tokscale';
+  sourceLabel: string;
+  windowLabel: string;
+  timezone: string;
+  observedAt?: string;
+  quotaObservedAt?: string;
+  totals: {
+    freshInputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    reasoningTokens: number;
+    freshProcessedTokens: number;
+    totalProcessedTokens: number;
+    cacheReadPercent: number;
+    freshInputPercent: number;
+    outputPercent: number;
+    cacheWritePercent: number;
+    messages: number;
+  };
+  cost: {
+    apiEquivalentUSD: number;
+    actualBilledUSD: number | null;
+    basisLabel: string;
+  };
+  byHarness: UsageShare[];
+  byModel: UsageShare[];
+  quotas: ProviderQuotaWindow[];
+  coverage: {
+    measuredHarnesses: string[];
+    note: string;
+  };
+  error?: string;
 }
 
 export interface DailyUsageSummary {
@@ -115,6 +180,7 @@ export interface DailyUsageSummary {
 
 export interface FleetState {
   activeSessions: AgentSession[];
+  activeSessionCount: number;
   pendingPermissions: PermissionRequest[];
   historicalSummary: {
     today: DailyUsageSummary;
@@ -142,6 +208,7 @@ export interface FleetState {
     lastPolledAt: number;
     activeHarnesses: AgentHarness[];
   };
+  usageIntelligence: ConsolidatedUsageSnapshot;
 }
 
 export interface HookEventPayload {

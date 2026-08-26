@@ -113,7 +113,7 @@ Commands:
 }
 
 function printTerminalDashboard(state: any) {
-  const { pet, historicalSummary, activeSessions, overallState, currentFleetVelocity } = state;
+  const { pet, historicalSummary, activeSessions, activeSessionCount, overallState, currentFleetVelocity, usageIntelligence } = state;
   const today = historicalSummary.today;
 
   // Pet ASCII Art
@@ -126,8 +126,12 @@ function printTerminalDashboard(state: any) {
   console.log(petArt);
 
   console.log('─'.repeat(78));
-  console.log(`\x1b[1mFLEET STATE:\x1b[0m ${formatStateBadge(overallState)}  │  \x1b[1mVELOCITY:\x1b[0m \x1b[33m${currentFleetVelocity} tok/s\x1b[0m  │  \x1b[1mSESSIONS:\x1b[0m ${activeSessions.length}`);
-  console.log(`\x1b[1mTODAY TOKENS:\x1b[0m \x1b[36m${today.totalTokens.toLocaleString()}\x1b[0m  │  \x1b[1mEST. COST:\x1b[0m \x1b[32m$${today.totalCostUSD.toFixed(4)}\x1b[0m  │  \x1b[1mSAVINGS:\x1b[0m \x1b[32m$${(today.totalSavingsUSD || 0).toFixed(2)}\x1b[0m`);
+  console.log(`\x1b[1mFLEET STATE:\x1b[0m ${formatStateBadge(overallState)}  │  \x1b[1mVELOCITY:\x1b[0m \x1b[33m${currentFleetVelocity} tok/s\x1b[0m  │  \x1b[1mACTIVE:\x1b[0m ${activeSessionCount ?? 0}`);
+  if (usageIntelligence?.observedAt) {
+    console.log(`\x1b[1mTODAY PROCESSED:\x1b[0m \x1b[36m${today.totalTokens.toLocaleString()}\x1b[0m  │  \x1b[1mCACHE SHARE:\x1b[0m \x1b[32m${usageIntelligence.totals.cacheReadPercent.toFixed(1)}%\x1b[0m  │  \x1b[1mAPI-EQ COST:\x1b[0m \x1b[32m$${today.totalCostUSD.toFixed(2)}\x1b[0m`);
+  } else {
+    console.log(`\x1b[1mUSAGE:\x1b[0m \x1b[33m${usageIntelligence?.status || 'loading'} — waiting for measured Tokscale telemetry\x1b[0m`);
+  }
   console.log('─'.repeat(78));
 
   console.log('\n\x1b[1mACTIVE & RECENT AGENT SESSIONS:\x1b[0m');

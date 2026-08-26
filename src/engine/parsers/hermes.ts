@@ -26,7 +26,8 @@ export class HermesParser {
         const rows = db.prepare(`
           SELECT id, model, cwd, title, started_at, last_activity_at, last_activity_description, git_branch,
                  input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-                 message_count, tool_call_count, chat_type, profile_name
+                 message_count, tool_call_count, chat_type, profile_name,
+                 estimated_cost_usd, actual_cost_usd, cost_status, cost_source
           FROM sessions
           WHERE hidden = 0 AND archived = 0
           ORDER BY last_activity_at DESC
@@ -44,17 +45,28 @@ export class HermesParser {
             totalTokens: (row.input_tokens || 0) + (row.output_tokens || 0) + (row.cache_write_tokens || 0) + (row.cache_read_tokens || 0)
           };
 
-          const cost = calculateCost(tokens, model);
+          const calculatedCost = calculateCost(tokens, model);
+          const hasActualCost = typeof row.actual_cost_usd === 'number' && Number.isFinite(row.actual_cost_usd);
+          const hasEstimatedCost = typeof row.estimated_cost_usd === 'number' && Number.isFinite(row.estimated_cost_usd);
+          const reportedTotalCost = hasActualCost
+            ? row.actual_cost_usd
+            : hasEstimatedCost
+              ? row.estimated_cost_usd
+              : calculatedCost.totalCostUSD;
+          const cost = {
+            ...calculatedCost,
+            totalCostUSD: Number(Number(reportedTotalCost).toFixed(4)),
+          };
           const maxContext = 200000;
-          const usedPct = Math.round((tokens.totalTokens / maxContext) * 100);
 
           const context: ContextWindowHealth = {
-            usedTokens: tokens.totalTokens,
+            known: false,
+            usedTokens: 0,
             maxTokens: maxContext,
-            usedPercentage: usedPct,
-            remainingPercentage: Math.max(0, 100 - usedPct),
-            isNearCompaction: usedPct > 85,
-            warningLevel: usedPct > 90 ? 'critical' : usedPct > 75 ? 'high' : 'healthy'
+            usedPercentage: 0,
+            remainingPercentage: 100,
+            isNearCompaction: false,
+            warningLevel: 'healthy'
           };
 
           const lastActiveAt = (row.last_activity_at || 0) * 1000;
@@ -87,7 +99,9 @@ export class HermesParser {
             lastActiveAt: lastActiveAt,
             tokenVelocity: isRecent ? 28 : 0,
             machineTag: row.chat_type === 'dm' ? '@frank-mobile' : '@frank-desktop',
-            gitBranch: row.git_branch || undefined
+            gitBranch: row.git_branch || undefined,
+            usageAccuracy: 'measured',
+            costBasis: hasActualCost ? 'actual' : 'api_equivalent',
           });
         }
         
@@ -107,13 +121,13 @@ export class HermesParser {
           const lastActiveAt = stat.mtimeMs;
           const isRecent = (Date.now() - lastActiveAt) < 180_000;
           
-          const model = 'claude-3-7-sonnet-20250219';
+          const model = 'unknown';
           const tokens: TokenUsage = {
-            inputTokens: 32000,
-            outputTokens: 4500,
-            cacheCreationTokens: 8000,
-            cacheReadTokens: 24000,
-            totalTokens: 68500
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 0,
           };
           
           const cost = calculateCost(tokens, model);
@@ -124,24 +138,27 @@ export class HermesParser {
             workspacePath: this.appDataDir,
             model,
             modelDisplayName: 'Hermes / Starlight Queen',
-            currentTask: 'Estate Orchestration & Cross-Harness Sync',
+            currentTask: 'Hermes log detected — usage details unavailable',
             state: isRecent ? 'thinking' : 'idle',
             subagentCount: 2,
             tokens,
             cost,
             context: {
-              usedTokens: tokens.totalTokens,
+              known: false,
+              usedTokens: 0,
               maxTokens: 200000,
-              usedPercentage: 34,
-              remainingPercentage: 66,
+              usedPercentage: 0,
+              remainingPercentage: 100,
               isNearCompaction: false,
               warningLevel: 'healthy'
             },
             startedAt: lastActiveAt - 7200_000,
             lastActiveAt,
-            tokenVelocity: isRecent ? 28 : 0,
+            tokenVelocity: 0,
             machineTag: '@frank-desktop',
-            gitBranch: 'queen/starlight'
+            gitBranch: 'queen/starlight',
+            usageAccuracy: 'unavailable',
+            costBasis: 'unavailable',
           });
         } catch {
           // ignore
