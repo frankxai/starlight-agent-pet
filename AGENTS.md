@@ -11,3 +11,8 @@
 - Local privacy is absolute: no prompts, secrets, or file contents leave the local host.
 - Always use `pnpm build` (`tsc`) after editing files in `src/`.
 - Verify tests with `node dist/test/run-tests.js` before commits.
+
+## Design Language
+- Never render all-caps interface copy and never use `text-transform: uppercase`.
+- Use sentence case for headings, labels, buttons, badges, navigation, and status text.
+- Preserve the official casing of product and provider names; prefer plain-language labels over acronyms.

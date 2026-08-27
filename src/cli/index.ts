@@ -60,7 +60,8 @@ export async function runCli(args: string[]) {
       console.log('\x1b[1m\x1b[35m[+] Starting Starlight Fleet Telemetry Daemon...\x1b[0m');
       const watcher = new FileSystemWatcher(aggregator);
       watcher.start();
-      const server = new TelemetryServer(aggregator);
+      const requestedPort = Number.parseInt(process.env.STARLIGHT_TELEMETRY_PORT || '9224', 10);
+      const server = new TelemetryServer(aggregator, Number.isFinite(requestedPort) ? requestedPort : 9224);
       await server.start();
       console.log('[+] Telemetry daemon running in background.');
       break;

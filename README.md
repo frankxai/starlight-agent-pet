@@ -56,7 +56,7 @@ It absorbs the best token calculation algorithms from **`ccusage`** and **`toksc
    - A draggable two-row rail keeps Codex, Claude, Grok, Antigravity, and OpenCode visible without opening the full dashboard.
    - Codex and Claude show authenticated subscription-limit usage when available. Providers without a quota feed show today's measured token share and are labeled differently so the percentages are never conflated.
    - Expands in place to every detected model, every quota window, and fixed read-only routes into the local Starlight Command Center at `127.0.0.1:4321`.
-   - `?mode=compact` is a shell-neutral surface for a browser panel today and a transparent Tauri/Electron host later.
+   - `?mode=compact` is shell-neutral and now runs inside the transparent, always-on-top Electron desktop companion.
 
 8. **Shell Statusline & Multi-Machine Sync**
    - `starlight-pet prompt`: Compact one-line statusline for PowerShell `$PROFILE`, Bash `.bashrc`, Zsh, or Starship.
@@ -76,12 +76,21 @@ pnpm install
 pnpm build
 ```
 
-### 2. View Terminal Status
+### 2. View terminal status
 ```bash
 node bin/starlight-pet.js status
 ```
 
-### 3. Launch Interactive Floating Pet & Observatory HUD
+### 3. Launch the native floating desktop companion
+
+```bash
+pnpm desktop
+```
+
+The companion opens as a frameless, transparent, always-on-top window. Drag it by the pet, click the rail to expand details, and right-click for command center or quit actions. It reuses an existing healthy telemetry service on port `9224` and starts its own only when needed.
+
+### 4. Launch the full observatory in a browser
+
 ```bash
 node bin/starlight-pet.js hud
 ```
@@ -89,15 +98,15 @@ node bin/starlight-pet.js hud
 
 The usage cockpit enriches the local parsers with the installed `tokscale` CLI. If Tokscale is unavailable, session presence remains visible while measured daily totals and quota cards fail closed as unavailable.
 
-### 4. Launch the lightweight two-row view
+### 5. Launch the lightweight two-row view
 
 ```bash
 node bin/starlight-pet.js mini
 ```
 
-The mini HUD uses the same loopback telemetry contract as the full Observatory. Click it to reveal all detected LLMs, detailed quota windows, and the Starlight Command Center destinations.
+The mini view uses the same loopback telemetry contract as the full observatory. Click it to reveal all detected models, detailed quota windows, and the Starlight command center destinations.
 
-### 4. Install Drop-in Claude Code Hooks
+### 6. Install drop-in Claude Code hooks
 ```powershell
 # On Windows PowerShell:
 .\hooks\install-hooks.ps1

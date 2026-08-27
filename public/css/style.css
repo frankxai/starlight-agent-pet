@@ -169,8 +169,7 @@ body {
   color: var(--text-muted);
   font-size: 9px;
   font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .provider-label-short { display: none; }
@@ -568,7 +567,6 @@ body.compact-mode .compact-hud-shell {
   border: 1px solid rgba(168, 85, 247, 0.3);
   padding: 3px 8px;
   border-radius: 6px;
-  text-transform: uppercase;
 }
 
 /* Metrics Top Grid */
@@ -602,7 +600,6 @@ body.compact-mode .compact-hud-shell {
 .metric-label {
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.5px;
   display: flex;
@@ -924,7 +921,6 @@ body.compact-mode .compact-hud-shell {
   color: var(--text-muted);
   background: rgba(255,255,255,0.05);
   font-size: 9px;
-  text-transform: uppercase;
 }
 
 /* Fleet Sessions Grid */
@@ -990,7 +986,6 @@ body.compact-mode .compact-hud-shell {
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 4px;
-  text-transform: uppercase;
 }
 
 .harness-claude { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }

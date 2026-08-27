@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Starlight Fleet Pet & Agent Observatory</title>
+  <title>Starlight fleet pet and agent observatory</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-  <!-- Always-available two-row subscription HUD -->
-  <aside id="floating-pet-container" class="compact-hud-shell" aria-label="Starlight compact usage HUD">
+  <!-- Always-available two-row subscription view -->
+  <aside id="floating-pet-container" class="compact-hud-shell" aria-label="Starlight compact usage view">
     <div id="dynamic-island" class="compact-hud glass-panel">
       <button id="compact-hud-toggle" class="compact-hud-summary" type="button" aria-expanded="false" aria-controls="compact-hud-drawer">
         <span class="compact-pet-avatar" aria-hidden="true">
@@ -19,7 +19,7 @@
 
         <span class="compact-provider-matrix" aria-label="Key provider usage percentages">
           <span id="compact-provider-names" class="compact-provider-row compact-provider-names">
-            <span>Codex</span><span>Claude</span><span>Grok</span><span>AntiG</span><span>Open</span>
+            <span>Codex</span><span>Claude</span><span>Grok</span><span>Antigravity</span><span>OpenCode</span>
           </span>
           <span id="compact-provider-values" class="compact-provider-row compact-provider-values">
             <span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>
@@ -27,7 +27,7 @@
         </span>
 
         <span class="compact-hud-state">
-          <span id="island-status">SYNCING</span>
+          <span id="island-status">Syncing</span>
           <span id="island-velocity">0 tok/s</span>
         </span>
         <span class="compact-chevron" aria-hidden="true">⌃</span>
@@ -36,7 +36,7 @@
       <section id="compact-hud-drawer" class="compact-hud-drawer" aria-hidden="true" aria-label="Expanded Starlight usage details">
         <header class="compact-drawer-header">
           <div>
-            <span class="eyebrow">CONSTELLATION PULSE</span>
+            <span class="eyebrow">Constellation pulse</span>
             <h2>Limits, activity & command</h2>
           </div>
           <div class="compact-legend" aria-label="Percentage legend">
@@ -48,7 +48,7 @@
         <div class="compact-drawer-grid">
           <section class="compact-drawer-panel" aria-labelledby="compact-limits-title">
             <div class="compact-panel-title">
-              <div><span class="eyebrow">SUBSCRIPTIONS</span><h3 id="compact-limits-title">All limit windows</h3></div>
+              <div><span class="eyebrow">Subscriptions</span><h3 id="compact-limits-title">All limit windows</h3></div>
               <span id="compact-observed-at" class="micro-stat">syncing</span>
             </div>
             <div id="compact-quota-list" class="compact-detail-list"><div class="empty-state">Reading quota windows…</div></div>
@@ -56,7 +56,7 @@
 
           <section class="compact-drawer-panel" aria-labelledby="compact-models-title">
             <div class="compact-panel-title">
-              <div><span class="eyebrow">ALL LLMS</span><h3 id="compact-models-title">Measured model activity</h3></div>
+              <div><span class="eyebrow">All models</span><h3 id="compact-models-title">Measured model activity</h3></div>
               <span id="compact-model-count" class="micro-stat">— models</span>
             </div>
             <div id="compact-model-list" class="compact-detail-list"><div class="empty-state">Reading model activity…</div></div>
@@ -67,7 +67,7 @@
           <div class="compact-command-status">
             <span id="compact-command-dot" class="command-dot is-checking"></span>
             <div>
-              <span class="eyebrow">STARLIGHT COMMAND CENTER</span>
+              <span class="eyebrow">Starlight command center</span>
               <h3 id="compact-command-title">Checking Observatory…</h3>
             </div>
             <span id="compact-command-latency" class="micro-stat">127.0.0.1:4321</span>
@@ -77,14 +77,14 @@
 
         <footer class="compact-drawer-footer">
           <span id="pet-bubble">All agent fleets nominal</span>
-          <span id="pet-status-text">IDLE • 0 tok/s</span>
-          <a class="compact-text-link" href="/?mode=compact" target="_blank" rel="noopener">Detach mini HUD ↗</a>
+          <span id="pet-status-text">Idle • 0 tok/s</span>
+          <a class="compact-text-link" href="/?mode=compact" target="_blank" rel="noopener">Detach mini view ↗</a>
         </footer>
       </section>
     </div>
   </aside>
 
-  <!-- Main Observatory HUD -->
+  <!-- Main observatory -->
   <div class="hud-container">
     
     <!-- Header -->
@@ -94,14 +94,14 @@
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
         </svg>
         <div>
-          <h1>STARLIGHT FLEET OBSERVATORY</h1>
-          <div style="font-size: 12px; color: var(--text-muted);">Real-Time Multi-Agent Fleet Telemetry, Cost Optimizer & Desktop Companion</div>
+          <h1>Starlight fleet observatory</h1>
+          <div style="font-size: 12px; color: var(--text-muted);">Real-time multi-agent fleet telemetry, cost optimizer and desktop companion</div>
         </div>
       </div>
 
       <!-- Controls & Skin Selector -->
       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-        <button id="sound-toggle-btn" class="skin-btn" style="border-color: rgba(255,255,255,0.15);">🔊 Sound: ON</button>
+        <button id="sound-toggle-btn" class="skin-btn" style="border-color: rgba(255,255,255,0.15);">🔊 Sound: On</button>
         <div class="skin-selector">
           <button class="skin-btn active" data-skin="codex_bot">🤖 Codex Cloud-Bot</button>
           <button class="skin-btn" data-skin="stellaris">🦊 Stellaris</button>
@@ -119,34 +119,34 @@
     <section class="glass-panel usage-cockpit" aria-labelledby="usage-title">
       <div class="usage-cockpit-header">
         <div>
-          <div class="eyebrow">MEASURED OPERATIONS</div>
+          <div class="eyebrow">Measured operations</div>
           <h2 id="usage-title">Actual usage · today</h2>
           <p id="usage-observed-at">Connecting to local usage telemetry…</p>
         </div>
         <div id="usage-source-badge" class="source-badge source-loading">
           <span class="source-dot"></span>
-          <span>SYNCING TOKSCALE</span>
+          <span>Syncing Tokscale</span>
         </div>
       </div>
 
       <div class="metrics-grid usage-metrics">
         <article class="metric-card metric-card-plain">
-          <div class="metric-label"><span>Processed tokens</span><span>TODAY</span></div>
+          <div class="metric-label"><span>Processed tokens</span><span>Today</span></div>
           <div id="metric-processed-tokens" class="metric-value">—</div>
           <div class="metric-sub">Fresh + output + cache traffic</div>
         </article>
         <article class="metric-card metric-card-plain">
-          <div class="metric-label"><span>Fresh processing</span><span>UNCACHED</span></div>
+          <div class="metric-label"><span>Fresh processing</span><span>Uncached</span></div>
           <div id="metric-fresh-tokens" class="metric-value">—</div>
           <div id="metric-fresh-percent" class="metric-sub">Waiting for measured data</div>
         </article>
         <article class="metric-card metric-card-plain metric-accent-emerald">
-          <div class="metric-label"><span>Cache reuse</span><span>EFFICIENCY</span></div>
+          <div class="metric-label"><span>Cache reuse</span><span>Efficiency</span></div>
           <div id="metric-cache-percent" class="metric-value">—</div>
           <div id="metric-cache-tokens" class="metric-sub">Measured cache-read share</div>
         </article>
         <article class="metric-card metric-card-plain metric-accent-violet">
-          <div class="metric-label"><span>API-equivalent cost</span><span>ESTIMATE</span></div>
+          <div class="metric-label"><span>Metered-equivalent cost</span><span>Estimate</span></div>
           <div id="metric-api-cost" class="metric-value">—</div>
           <div id="metric-cost-basis" class="metric-sub">Not an invoice or subscription charge</div>
         </article>
@@ -156,7 +156,7 @@
         <div class="usage-subpanel">
           <div class="subpanel-heading">
             <div>
-              <div class="eyebrow">TOKEN COMPOSITION</div>
+              <div class="eyebrow">Token composition</div>
               <h3>Where the context went</h3>
             </div>
             <span id="metric-message-count" class="micro-stat">— messages</span>
@@ -168,7 +168,7 @@
         <div class="usage-subpanel">
           <div class="subpanel-heading">
             <div>
-              <div class="eyebrow">PROVIDER LIMITS</div>
+              <div class="eyebrow">Provider limits</div>
               <h3>Subscription headroom</h3>
             </div>
             <span class="micro-stat">Used / remaining</span>
@@ -183,14 +183,14 @@
     <section class="share-grid" aria-label="Usage distribution">
       <div class="glass-panel share-panel">
         <div class="subpanel-heading">
-          <div><div class="eyebrow">HARNESS SHARE</div><h3>Who used the context</h3></div>
+          <div><div class="eyebrow">Harness share</div><h3>Who used the context</h3></div>
           <span class="micro-stat">% processed</span>
         </div>
         <div id="harness-share-list" class="share-list"><div class="empty-state">Syncing…</div></div>
       </div>
       <div class="glass-panel share-panel">
         <div class="subpanel-heading">
-          <div><div class="eyebrow">MODEL SHARE</div><h3>What carried the work</h3></div>
+          <div><div class="eyebrow">Model share</div><h3>What carried the work</h3></div>
           <span class="micro-stat">Top models</span>
         </div>
         <div id="model-share-list" class="share-list"><div class="empty-state">Syncing…</div></div>
@@ -202,15 +202,15 @@
       <div class="progression-info">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span id="user-level" class="brand-badge">Level 1</span>
-          <h3 style="margin: 0;">Arcanea Mastery Progression</h3>
+          <h3 style="margin: 0;">Arcanea mastery progression</h3>
         </div>
         <div id="user-gate" class="progression-gate">Gate 1: Foundation (Apprentice)</div>
       </div>
 
       <div class="xp-bar-wrap">
         <div style="display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); margin-bottom: 6px; color: var(--text-muted);">
-          <span>Experience Points</span>
-          <span id="xp-text">0 / 1000 XP</span>
+          <span>Experience points</span>
+          <span id="xp-text">0 / 1000 xp</span>
         </div>
         <div class="xp-bar-bg">
           <div id="xp-fill" class="xp-bar-fill" style="width: 0%;"></div>
@@ -223,7 +223,7 @@
       <div class="section-title">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan-glow);"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-          <span>Observed Agent Sessions</span>
+          <span>Observed agent sessions</span>
         </div>
         <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Recent first · live state when available</span>
       </div>
@@ -238,9 +238,9 @@
       <div class="section-title">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan-glow);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Inference Router Intelligence</span>
+          <span>Inference router intelligence</span>
         </div>
-        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Model Registry & Capabilities</span>
+        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Model registry and capabilities</span>
       </div>
       <div class="glass-panel" style="padding: 16px;">
         <div id="model-registry-grid" style="display: flex; flex-wrap: wrap; gap: 10px;">

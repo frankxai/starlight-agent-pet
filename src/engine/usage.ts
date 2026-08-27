@@ -173,7 +173,7 @@ export function normalizeTokscaleDailyReport(
     cost: {
       apiEquivalentUSD: Number(finite(report?.totalCost).toFixed(4)),
       actualBilledUSD: null,
-      basisLabel: 'API-equivalent estimate from local usage logs',
+      basisLabel: 'Metered-equivalent estimate from local usage logs',
     },
     byHarness,
     byModel,
@@ -270,7 +270,7 @@ export class UsageIntelligence {
       cost: {
         apiEquivalentUSD: 0,
         actualBilledUSD: null,
-        basisLabel: 'API-equivalent estimate from local usage logs',
+        basisLabel: 'Metered-equivalent estimate from local usage logs',
       },
       byHarness: [],
       byModel: [],

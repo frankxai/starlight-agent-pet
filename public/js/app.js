@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     soundBtn.addEventListener('click', () => {
       const isEnabled = petRenderer ? !petRenderer.audio.enabled : false;
       if (petRenderer) petRenderer.audio.enabled = isEnabled;
-      soundBtn.textContent = isEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+      soundBtn.textContent = isEnabled ? '🔊 Sound: On' : '🔇 Sound: Off';
       fetch('/api/pet/sound', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="background: rgba(255,255,255,0.05); border: 1px solid ${color}40; border-radius: 20px; padding: 4px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px;">
               <span style="color: ${color}; font-weight: bold;">${emoji}</span>
               <span style="color: #fff; font-weight: 500;">${escapeHtml(m.displayName)}</span>
-              <span style="font-size: 9px; background: ${color}20; color: ${color}; padding: 2px 6px; border-radius: 10px; text-transform: uppercase;">${m.tier}</span>
+              <span style="font-size: 9px; background: ${color}20; color: ${color}; padding: 2px 6px; border-radius: 10px;">${m.tier}</span>
               <span style="font-size: 10px; margin-left: 4px; display: flex; gap: 2px;">${vision}${thinking}${tools}</span>
             </div>
           `;
@@ -210,12 +210,12 @@ document.addEventListener('DOMContentLoaded', () => {
       petBubble.textContent = state.pet?.speechBubble || state.pet?.currentMood || 'All fleets nominal';
     }
     if (petStatusText) {
-      petStatusText.textContent = `${state.overallState.toUpperCase()} • ${state.currentFleetVelocity} tok/s`;
+      petStatusText.textContent = `${formatStatusLabel(state.overallState)} • ${state.currentFleetVelocity} tok/s`;
     }
 
     // 3. Update Dynamic Island
     if (islandStatus) {
-      islandStatus.textContent = `${state.activeSessionCount ?? state.activeSessions.length} Active • ${state.overallState.toUpperCase()}`;
+      islandStatus.textContent = `${state.activeSessionCount ?? state.activeSessions.length} active • ${formatStatusLabel(state.overallState)}`;
     }
     if (islandVelocity) {
       islandVelocity.textContent = `${state.currentFleetVelocity} tok/s`;
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.pet) {
       if (userLevel) userLevel.textContent = `Level ${state.pet.level}`;
       if (userGate) userGate.textContent = state.pet.arcaneaGate;
-      if (xpText) xpText.textContent = `${state.pet.currentXP} / ${state.pet.nextLevelXP} XP`;
+      if (xpText) xpText.textContent = `${state.pet.currentXP} / ${state.pet.nextLevelXP} xp`;
       if (xpFill) {
         const pct = Math.min(100, (state.pet.currentXP / state.pet.nextLevelXP) * 100);
         xpFill.style.width = `${pct}%`;
@@ -372,12 +372,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (usageSourceBadge) {
       usageSourceBadge.className = `source-badge source-${usage.status || 'loading'}`;
       const sourceText = usage.status === 'ready'
-        ? 'MEASURED · TOKSCALE'
+        ? 'Measured · Tokscale'
         : usage.status === 'stale'
-          ? 'STALE · LAST KNOWN'
+          ? 'Stale · last known'
           : usage.status === 'unavailable'
-            ? 'USAGE UNAVAILABLE'
-            : 'SYNCING TOKSCALE';
+            ? 'Usage unavailable'
+            : 'Syncing Tokscale';
       usageSourceBadge.innerHTML = `<span class="source-dot"></span><span>${sourceText}</span>`;
     }
 
@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (metricCachePercent) metricCachePercent.textContent = `${Number(totals.cacheReadPercent || 0).toFixed(1)}%`;
     if (metricCacheTokens) metricCacheTokens.textContent = `${formatCompact(totals.cacheReadTokens)} cache-read tokens`;
     if (metricApiCost) metricApiCost.textContent = `$${Number(usage.cost?.apiEquivalentUSD || 0).toFixed(2)}`;
-    if (metricCostBasis) metricCostBasis.textContent = usage.cost?.basisLabel || 'API-equivalent estimate';
+    if (metricCostBasis) metricCostBasis.textContent = usage.cost?.basisLabel || 'Metered-equivalent estimate';
     if (metricMessageCount) metricMessageCount.textContent = `${Number(totals.messages || 0).toLocaleString()} messages`;
 
     renderComposition(totals);
@@ -490,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="display: flex; align-items: center; gap: 12px;">
           <div style="font-size: 20px;">⚡</div>
           <div>
-            <div style="font-size: 14px; font-weight: 700; color: #fff;">Permission Requested: ${escapeHtml(p.toolName)}</div>
+            <div style="font-size: 14px; font-weight: 700; color: #fff;">Permission requested: ${escapeHtml(p.toolName)}</div>
             <div style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(p.description)}</div>
           </div>
         </div>
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSessions(sessions) {
     if (!sessions || sessions.length === 0) {
-      sessionsList.innerHTML = '<div class="glass-panel" style="padding: 24px; text-align: center; color: var(--text-muted);">No active CLI sessions detected. Start Claude Code, Codex, Antigravity or Hermes.</div>';
+      sessionsList.innerHTML = '<div class="glass-panel" style="padding: 24px; text-align: center; color: var(--text-muted);">No active command-line sessions detected. Start Claude Code, Codex, Antigravity or Hermes.</div>';
       return;
     }
 
@@ -554,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           <div class="context-bar-container">
             <div class="context-bar-label">
-              <span>Context Saturation</span>
+              <span>Context saturation</span>
               <span>${contextKnown ? `${s.context.usedPercentage}% (${Number(s.context.usedTokens || 0).toLocaleString()} tok)` : 'Unavailable from harness'}</span>
             </div>
             <div class="context-bar-bg">
@@ -565,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="session-stats-row">
             <span>Tokens: <strong>${s.tokens.totalTokens.toLocaleString()}</strong></span>
             <span>Cost: <strong>$${s.cost.totalCostUSD.toFixed(4)}</strong> <span class="accuracy-badge">${escapeHtml(s.costBasis || 'unavailable')}</span> ${savingsHtml}</span>
-            <span>State: <strong style="color: var(--cyan-glow);">${s.state.toUpperCase()}</strong></span>
+            <span>State: <strong style="color: var(--cyan-glow);">${formatStatusLabel(s.state)}</strong></span>
           </div>
         </div>
       `;
@@ -639,6 +639,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const number = clampPercent(value);
     if (number > 0 && number < 0.1) return '≤0.1%';
     return `${number >= 10 || Number.isInteger(number) ? number.toFixed(0) : number.toFixed(1)}%`;
+  }
+
+  function formatStatusLabel(value) {
+    const label = String(value || 'idle').replace(/[_-]+/g, ' ').trim().toLocaleLowerCase();
+    return label ? label.charAt(0).toLocaleUpperCase() + label.slice(1) : 'Idle';
   }
 
   function clampPercent(value) {
