@@ -208,7 +208,22 @@ export class CodexParser {
       const cached = this.rolloutCache.get(filePath);
       if (cached?.mtimeMs === mtimeMs) return cached.snapshot;
 
-      const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+      const stat = fs.statSync(filePath);
+      const maxBytes = 2 * 1024 * 1024;
+      const start = Math.max(0, stat.size - maxBytes);
+      const buffer = Buffer.allocUnsafe(stat.size - start);
+      const descriptor = fs.openSync(filePath, 'r');
+      try {
+        fs.readSync(descriptor, buffer, 0, buffer.length, start);
+      } finally {
+        fs.closeSync(descriptor);
+      }
+      let content = buffer.toString('utf8');
+      if (start > 0) {
+        const firstNewline = content.indexOf('\n');
+        content = firstNewline >= 0 ? content.slice(firstNewline + 1) : '';
+      }
+      const lines = content.split(/\r?\n/);
       let snapshot: CodexRolloutSnapshot | null = null;
       for (let index = lines.length - 1; index >= 0; index--) {
         const line = lines[index].trim();

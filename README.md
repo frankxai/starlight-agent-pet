@@ -87,7 +87,9 @@ node bin/starlight-pet.js status
 pnpm desktop
 ```
 
-The companion opens as a frameless, transparent, always-on-top window. Drag it by the pet, click the rail to expand details, and right-click for command center or quit actions. It reuses an existing healthy telemetry service on port `9224` and starts its own only when needed.
+The companion opens as a frameless, transparent, always-on-top window. Drag it by the pet, click the rail to expand details, and right-click for command center or quit actions. On Windows it registers itself to launch at sign-in; the context menu exposes that setting. A ten-second watchdog reuses a healthy telemetry service on port `9224`, starts one when needed, and recovers it if the local bridge exits.
+
+Quota windows and daily activity are separate live lanes. Authenticated provider limits refresh every minute, while the heavier all-harness Tokscale scan refreshes every five minutes. The HUD shows each lane's own age and refresh state, retains only the normalized secret-free snapshot across restarts, and never presents an old value as newly observed.
 
 ### 4. Launch the full observatory in a browser
 

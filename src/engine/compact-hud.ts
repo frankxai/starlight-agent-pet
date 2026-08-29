@@ -15,7 +15,7 @@ interface ProviderDefinition {
   id: CompactProviderMetric['id'];
   label: string;
   shortLabel: string;
-  quotaProvider?: string;
+  quotaProviders?: string[];
   usageMatcher: (share: UsageShare) => boolean;
   usageSource: 'harness' | 'model';
 }
@@ -25,7 +25,7 @@ const KEY_PROVIDERS: ProviderDefinition[] = [
     id: 'codex',
     label: 'Codex',
     shortLabel: 'Codex',
-    quotaProvider: 'Codex',
+    quotaProviders: ['Codex'],
     usageSource: 'harness',
     usageMatcher: (share) => share.id.toLowerCase() === 'codex',
   },
@@ -33,7 +33,7 @@ const KEY_PROVIDERS: ProviderDefinition[] = [
     id: 'claude',
     label: 'Claude',
     shortLabel: 'Claude',
-    quotaProvider: 'Claude',
+    quotaProviders: ['Claude'],
     usageSource: 'harness',
     usageMatcher: (share) => share.id.toLowerCase() === 'claude',
   },
@@ -41,6 +41,7 @@ const KEY_PROVIDERS: ProviderDefinition[] = [
     id: 'grok',
     label: 'Grok',
     shortLabel: 'Grok',
+    quotaProviders: ['Grok Build', 'Grok'],
     usageSource: 'model',
     usageMatcher: (share) => {
       const identity = `${share.id} ${share.provider || ''}`.toLowerCase();
@@ -70,9 +71,10 @@ function roundPercent(value: number): number {
   return Math.round(Math.max(0, Math.min(100, value)) * 10) / 10;
 }
 
-function selectQuota(quotas: ProviderQuotaWindow[], provider: string): ProviderQuotaWindow | undefined {
+function selectQuota(quotas: ProviderQuotaWindow[], providers: string[]): ProviderQuotaWindow | undefined {
+  const normalizedProviders = new Set(providers.map(provider => provider.toLowerCase()));
   return quotas
-    .filter((quota) => quota.provider.toLowerCase() === provider.toLowerCase())
+    .filter((quota) => normalizedProviders.has(quota.provider.toLowerCase()))
     .sort((a, b) => b.usedPercent - a.usedPercent)[0];
 }
 
@@ -92,8 +94,8 @@ export function buildKeyProviderMetrics(
   usage: ConsolidatedUsageSnapshot,
 ): CompactProviderMetric[] {
   return KEY_PROVIDERS.map((definition) => {
-    const quota = definition.quotaProvider
-      ? selectQuota(usage.quotas, definition.quotaProvider)
+    const quota = definition.quotaProviders
+      ? selectQuota(usage.quotas, definition.quotaProviders)
       : undefined;
     if (quota) {
       return {
@@ -145,9 +147,16 @@ export class CompactHudService {
 
   public async getSnapshot(): Promise<CompactHudSnapshot> {
     const usage = this.usage.getSnapshot();
+    const unavailableFreshness = { status: 'unavailable' as const, ageMs: null };
     return {
       status: usage.status,
       observedAt: usage.observedAt,
+      quotaObservedAt: usage.quotaObservedAt,
+      isRefreshing: Boolean(usage.isRefreshing),
+      freshness: usage.freshness || {
+        activity: unavailableFreshness,
+        quotas: unavailableFreshness,
+      },
       keyProviders: buildKeyProviderMetrics(usage),
       allModels: usage.byModel.filter((model) => model.totalProcessedTokens > 0),
       allQuotas: usage.quotas,

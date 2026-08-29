@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let fleetState = null;
   let compactRefreshInFlight = false;
   let compactRefreshTimer = null;
+  let lastCompactRefreshAt = 0;
   const compactMode = new URLSearchParams(window.location.search).get('mode') === 'compact';
   document.body.classList.toggle('compact-mode', compactMode);
 
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const compactHudDrawer = document.getElementById('compact-hud-drawer');
   const compactProviderNames = document.getElementById('compact-provider-names');
   const compactProviderValues = document.getElementById('compact-provider-values');
+  const compactLiveDot = document.getElementById('compact-live-dot');
   const compactQuotaList = document.getElementById('compact-quota-list');
   const compactModelList = document.getElementById('compact-model-list');
   const compactModelCount = document.getElementById('compact-model-count');
@@ -173,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ws.onopen = () => {
       console.log('[Starlight HUD] Connected to live telemetry stream');
+      setCompactLiveIndicator('refreshing', 'Connected · syncing measured usage');
     };
 
     ws.onmessage = (event) => {
@@ -181,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (msg.type === 'FLEET_STATE') {
           fleetState = msg.payload;
           updateUI(fleetState);
+          if (Date.now() - lastCompactRefreshAt >= 5_000) void refreshCompactHud();
         } else if (msg.type === 'PET_POKED') {
           if (petRenderer) petRenderer.triggerPoke();
         }
@@ -190,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ws.onclose = () => {
+      setCompactLiveIndicator('offline', 'Local telemetry reconnecting');
       setTimeout(connectWebSocket, 2000);
     };
   }
@@ -253,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch('/api/hud/compact', { cache: 'no-store' });
       if (!response.ok) throw new Error(`Compact HUD returned ${response.status}`);
       renderCompactHud(await response.json());
+      lastCompactRefreshAt = Date.now();
     } catch {
       renderCompactUnavailable();
     } finally {
@@ -263,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function scheduleCompactRefresh() {
     if (compactRefreshTimer) window.clearTimeout(compactRefreshTimer);
     const expanded = dynamicIsland?.classList.contains('is-expanded');
-    const delay = document.hidden ? 300_000 : expanded ? 30_000 : 60_000;
+    const delay = document.hidden ? 60_000 : expanded ? 10_000 : 15_000;
     compactRefreshTimer = window.setTimeout(async () => {
       await refreshCompactHud();
       scheduleCompactRefresh();
@@ -299,10 +305,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (compactObservedAt) {
-      compactObservedAt.textContent = snapshot.observedAt
-        ? `updated ${timeAgo(new Date(snapshot.observedAt).getTime())}`
-        : snapshot.status;
+      const quotaFreshness = formatFreshnessLane(snapshot.freshness?.quotas, 'limits');
+      const activityFreshness = formatFreshnessLane(snapshot.freshness?.activity, 'activity');
+      compactObservedAt.textContent = `${quotaFreshness} · ${activityFreshness}`;
     }
+
+    const freshnessStates = [snapshot.freshness?.quotas?.status, snapshot.freshness?.activity?.status];
+    const indicatorState = freshnessStates.includes('live')
+      ? 'live'
+      : freshnessStates.includes('refreshing')
+        ? 'refreshing'
+        : freshnessStates.includes('stale')
+          ? 'stale'
+          : 'offline';
+    setCompactLiveIndicator(
+      indicatorState,
+      `Limits ${formatFreshnessValue(snapshot.freshness?.quotas)} · Activity ${formatFreshnessValue(snapshot.freshness?.activity)}`,
+    );
 
     const quotas = snapshot?.allQuotas || [];
     if (compactQuotaList) {
@@ -362,6 +381,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (compactObservedAt) compactObservedAt.textContent = 'telemetry unavailable';
     if (compactCommandDot) compactCommandDot.className = 'command-dot is-offline';
     if (compactCommandTitle) compactCommandTitle.textContent = 'Bridge unavailable';
+    setCompactLiveIndicator('offline', 'Local telemetry unavailable');
+  }
+
+  function setCompactLiveIndicator(state, title) {
+    if (!compactLiveDot) return;
+    compactLiveDot.className = `compact-live-dot is-${state}`;
+    compactLiveDot.title = title;
+  }
+
+  function formatFreshnessLane(lane, label) {
+    return `${label} ${formatFreshnessValue(lane)}`;
+  }
+
+  function formatFreshnessValue(lane) {
+    if (!lane) return 'unavailable';
+    if (lane.status === 'refreshing' && lane.observedAt) {
+      return `refreshing · ${timeAgo(new Date(lane.observedAt).getTime())}`;
+    }
+    if (lane.status === 'refreshing') return 'refreshing';
+    if (lane.observedAt) return timeAgo(new Date(lane.observedAt).getTime());
+    return lane.status || 'unavailable';
   }
 
   function renderUsage(usage) {

@@ -32,9 +32,9 @@ export async function runCli(args: string[]) {
     case 'open': {
       console.log('\x1b[1m\x1b[32m[+] Launching Starlight Agent Pet & HUD...\x1b[0m');
       const watcher = new FileSystemWatcher(aggregator);
-      watcher.start();
       const server = new TelemetryServer(aggregator);
       const port = await server.start();
+      watcher.start();
       const url = `http://localhost:${port}`;
       
       console.log(`[+] Observatory available at: ${url}`);
@@ -46,9 +46,9 @@ export async function runCli(args: string[]) {
     case 'compact': {
       console.log('\x1b[1m\x1b[36m[+] Launching Starlight Constellation mini HUD...\x1b[0m');
       const watcher = new FileSystemWatcher(aggregator);
-      watcher.start();
       const server = new TelemetryServer(aggregator);
       const port = await server.start();
+      watcher.start();
       const url = `http://localhost:${port}/?mode=compact`;
 
       console.log(`[+] Compact usage HUD available at: ${url}`);
@@ -59,10 +59,10 @@ export async function runCli(args: string[]) {
     case 'daemon': {
       console.log('\x1b[1m\x1b[35m[+] Starting Starlight Fleet Telemetry Daemon...\x1b[0m');
       const watcher = new FileSystemWatcher(aggregator);
-      watcher.start();
       const requestedPort = Number.parseInt(process.env.STARLIGHT_TELEMETRY_PORT || '9224', 10);
       const server = new TelemetryServer(aggregator, Number.isFinite(requestedPort) ? requestedPort : 9224);
       await server.start();
+      watcher.start();
       console.log('[+] Telemetry daemon running in background.');
       break;
     }

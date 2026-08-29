@@ -87,6 +87,7 @@ export class TelemetryServer {
     if (this.broadcastInterval) clearInterval(this.broadcastInterval);
     if (this.wss) this.wss.close();
     if (this.server) this.server.close();
+    this.aggregator.stop();
   }
 
   public async broadcast(customMessage?: any) {

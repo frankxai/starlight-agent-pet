@@ -140,8 +140,29 @@ body {
   bottom: 5px;
   border: 1px solid #081019;
   border-radius: 50%;
-  background: var(--emerald-glow);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
+  background: var(--live-dot-color, var(--emerald-glow));
+  box-shadow: 0 0 8px var(--live-dot-shadow, rgba(16, 185, 129, 0.9));
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.compact-live-dot.is-live {
+  --live-dot-color: var(--emerald-glow);
+  --live-dot-shadow: rgba(16, 185, 129, 0.9);
+}
+
+.compact-live-dot.is-refreshing {
+  --live-dot-color: var(--cyan-glow);
+  --live-dot-shadow: rgba(0, 240, 255, 0.85);
+}
+
+.compact-live-dot.is-stale {
+  --live-dot-color: var(--amber-glow);
+  --live-dot-shadow: rgba(245, 158, 11, 0.82);
+}
+
+.compact-live-dot.is-offline {
+  --live-dot-color: #64748b;
+  --live-dot-shadow: rgba(100, 116, 139, 0.6);
 }
 
 .compact-provider-matrix {

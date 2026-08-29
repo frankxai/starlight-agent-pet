@@ -29,6 +29,7 @@ export class FleetAggregator {
   private currentPetSkin: PetSkinId = 'codex_bot';
   private soundEnabled = true;
   private serverStartTime = Date.now();
+  private fleetStateInFlight: Promise<FleetState> | null = null;
   
   public analytics = new HistoricalAnalytics();
   public usageIntelligence: UsageIntelligence;
@@ -39,6 +40,10 @@ export class FleetAggregator {
     const usageEnabled = process.env.STARLIGHT_DISABLE_TOKSCALE !== '1';
     this.usageIntelligence = new UsageIntelligence(undefined, usageEnabled);
     this.usageIntelligence.start();
+  }
+
+  public stop(): void {
+    this.usageIntelligence.stop();
   }
   public setPetSkin(skin: PetSkinId) {
     this.currentPetSkin = skin;
@@ -145,10 +150,18 @@ export class FleetAggregator {
     this.liveSessions.set(payload.sessionId, existing);
   }
 
-  public async getFleetState(): Promise<FleetState> {
+  public getFleetState(): Promise<FleetState> {
+    if (this.fleetStateInFlight) return this.fleetStateInFlight;
+    this.fleetStateInFlight = this.collectFleetState().finally(() => {
+      this.fleetStateInFlight = null;
+    });
+    return this.fleetStateInFlight;
+  }
+
+  private async collectFleetState(): Promise<FleetState> {
     // 1. Run all parsers in parallel
     const [claudeSessions, antiSessions, codexSessions, hermesSessions, grokSessions] = await Promise.all([
-      this.claudeParser.parseAllSessions(30),
+      this.claudeParser.parseAllSessions(10),
       this.antigravityParser.parseAllSessions(15),
       this.codexParser.parseAllSessions(5),
       this.hermesParser.parseAllSessions(5),

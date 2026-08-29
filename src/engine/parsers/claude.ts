@@ -8,6 +8,7 @@ export class ClaudeParser {
   private baseDir: string;
   private todosDir: string;
   private tmpDir: string;
+  private sessionCache = new Map<string, { mtimeMs: number; session: AgentSession | null }>();
 
   constructor() {
     const home = os.homedir();
@@ -23,33 +24,24 @@ export class ClaudeParser {
     }
 
     const sessions: AgentSession[] = [];
-    const projectDirs = this.getProjectDirs();
+    const candidates: Array<{ path: string; projectDir: string; mtimeMs: number }> = [];
 
-    for (const projDir of projectDirs) {
+    for (const projDir of this.getProjectDirs()) {
       const fullProjPath = path.join(this.baseDir, projDir);
       try {
-        const files = fs.readdirSync(fullProjPath)
-          .filter(f => f.endsWith('.jsonl'))
-          .map(f => {
-            const fp = path.join(fullProjPath, f);
-            return {
-              name: f,
-              path: fp,
-              mtime: fs.statSync(fp).mtimeMs
-            };
-          })
-          .sort((a, b) => b.mtime - a.mtime)
-          .slice(0, 10); // Check top 10 most recent per project
-
-        for (const file of files) {
-          const session = await this.parseSessionFile(file.path, projDir);
-          if (session) {
-            sessions.push(session);
-          }
+        for (const file of fs.readdirSync(fullProjPath).filter(name => name.endsWith('.jsonl'))) {
+          const filePath = path.join(fullProjPath, file);
+          candidates.push({ path: filePath, projectDir: projDir, mtimeMs: fs.statSync(filePath).mtimeMs });
         }
-      } catch (err) {
+      } catch {
         // Skip unreadable directories
       }
+    }
+
+    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const candidate of candidates.slice(0, limit)) {
+      const session = await this.parseSessionFile(candidate.path, candidate.projectDir);
+      if (session) sessions.push(session);
     }
 
     // Sort all sessions by last active time descending
@@ -59,12 +51,16 @@ export class ClaudeParser {
 
   public async parseSessionFile(filePath: string, projDirName: string): Promise<AgentSession | null> {
     try {
-      const content = fs.readFileSync(filePath, 'utf8');
+      const fileStat = fs.statSync(filePath);
+      const fileMtime = fileStat.mtimeMs;
+      const cached = this.sessionCache.get(filePath);
+      if (cached?.mtimeMs === fileMtime) return this.cloneSession(cached.session);
+
+      const { content, truncated } = this.readTail(filePath, fileStat.size);
       const lines = content.split('\n');
       if (lines.length === 0 || !lines[0].trim()) return null;
 
       const sessionId = path.basename(filePath, '.jsonl');
-      const fileMtime = fs.statSync(filePath).mtimeMs;
       let model = 'claude-3-7-sonnet-20250219';
       let gitBranch = 'main';
       let workspacePath = this.decodeProjDir(projDirName);
@@ -192,7 +188,7 @@ export class ClaudeParser {
 
       const projectName = path.basename(workspacePath) || 'workspace';
 
-      return {
+      const session: AgentSession = {
         id: sessionId,
         harness: 'claude',
         projectName,
@@ -211,12 +207,44 @@ export class ClaudeParser {
         tokenVelocity,
         machineTag: '@frank-desktop',
         gitBranch,
-        usageAccuracy: 'measured',
+        usageAccuracy: truncated ? 'estimated' : 'measured',
         costBasis: 'api_equivalent',
       };
+      this.sessionCache.set(filePath, { mtimeMs: fileMtime, session });
+      return this.cloneSession(session);
     } catch {
       return null;
     }
+  }
+
+  private cloneSession(session: AgentSession | null): AgentSession | null {
+    if (!session) return null;
+    return {
+      ...session,
+      tokens: { ...session.tokens },
+      cost: { ...session.cost },
+      savings: session.savings ? { ...session.savings } : undefined,
+      context: { ...session.context },
+      activeTool: session.activeTool ? { ...session.activeTool } : undefined,
+    };
+  }
+
+  private readTail(filePath: string, fileSize: number, maxBytes = 2 * 1024 * 1024): { content: string; truncated: boolean } {
+    const start = Math.max(0, fileSize - maxBytes);
+    const length = fileSize - start;
+    const buffer = Buffer.allocUnsafe(length);
+    const descriptor = fs.openSync(filePath, 'r');
+    try {
+      fs.readSync(descriptor, buffer, 0, length, start);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    let content = buffer.toString('utf8');
+    if (start > 0) {
+      const firstNewline = content.indexOf('\n');
+      content = firstNewline >= 0 ? content.slice(firstNewline + 1) : '';
+    }
+    return { content, truncated: start > 0 };
   }
 
   private readContextBridge(sessionId: string, model: string): ContextWindowHealth {

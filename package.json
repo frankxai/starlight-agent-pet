@@ -1,5 +1,6 @@
 {
   "name": "starlight-agent-pet",
+  "productName": "Starlight Agent Pet",
   "version": "1.0.0",
   "description": "Unified real-time token telemetry engine and floating desktop pet companion across Claude Code, Codex CLI, Antigravity, Hermes Agent, Kilo, and Grok.",
   "main": "dist/index.js",

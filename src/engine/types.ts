@@ -137,6 +137,11 @@ export interface ConsolidatedUsageSnapshot {
   timezone: string;
   observedAt?: string;
   quotaObservedAt?: string;
+  isRefreshing?: boolean;
+  freshness?: {
+    activity: UsageLaneFreshness;
+    quotas: UsageLaneFreshness;
+  };
   totals: {
     freshInputTokens: number;
     outputTokens: number;
@@ -164,6 +169,12 @@ export interface ConsolidatedUsageSnapshot {
     note: string;
   };
   error?: string;
+}
+
+export interface UsageLaneFreshness {
+  status: 'live' | 'refreshing' | 'stale' | 'unavailable';
+  observedAt?: string;
+  ageMs: number | null;
 }
 
 export type CompactMetricBasis = 'quota' | 'activity_share' | 'unavailable';
@@ -199,6 +210,12 @@ export interface CommandCenterSnapshot {
 export interface CompactHudSnapshot {
   status: ConsolidatedUsageSnapshot['status'];
   observedAt?: string;
+  quotaObservedAt?: string;
+  isRefreshing: boolean;
+  freshness: {
+    activity: UsageLaneFreshness;
+    quotas: UsageLaneFreshness;
+  };
   keyProviders: CompactProviderMetric[];
   allModels: UsageShare[];
   allQuotas: ProviderQuotaWindow[];

@@ -3,7 +3,7 @@ import { calculateCost, calculateSavings, resolveModelPricing } from '../engine/
 import { ClaudeParser } from '../engine/parsers/claude';
 import { AntigravityParser } from '../engine/parsers/antigravity';
 import { TokenUsage } from '../engine/types';
-import { normalizeTokscaleDailyReport, normalizeTokscaleQuotaReport } from '../engine/usage';
+import { normalizeTokscaleDailyReport, normalizeTokscaleQuotaReport, UsageIntelligence } from '../engine/usage';
 import { buildKeyProviderMetrics } from '../engine/compact-hud';
 import { CommandCenterBridge } from '../engine/command-center';
 
@@ -292,6 +292,31 @@ async function runTests() {
   assert(quotas[0].remainingPercent === 72, `Remaining quota is calculated (${quotas[0].remainingPercent}%)`);
   assert(!JSON.stringify(quotas).includes('must-not-leak'), 'Account emails are removed from the public usage contract');
 
+  const refreshCalls: string[] = [];
+  const liveUsage = new UsageIntelligence(async (args) => {
+    refreshCalls.push(args.join(' '));
+    if (args[0] === 'usage') {
+      return JSON.stringify([
+        { provider: 'Codex', plan: 'Pro', metrics: [{ label: '5h', used_percent: 38, resets_at: '2026-09-03T19:47:35+02:00' }] },
+      ]);
+    }
+    return JSON.stringify({
+      entries: [{ client: 'codex', provider: 'openai', model: 'gpt-5.6-sol', input: 20, output: 5, cacheRead: 75, messageCount: 1 }],
+      totalInput: 20,
+      totalOutput: 5,
+      totalCacheRead: 75,
+      totalCacheWrite: 0,
+      totalMessages: 1,
+      totalCost: 0.5,
+    });
+  }, false, { cachePath: false });
+  await liveUsage.refreshNow();
+  const liveUsageSnapshot = liveUsage.getSnapshot();
+  assert(refreshCalls.length === 2, 'Explicit refresh updates the daily and quota lanes from their real adapters');
+  assert(liveUsageSnapshot.quotas[0]?.usedPercent === 38, 'Live quota refresh preserves the measured provider percentage');
+  assert(liveUsageSnapshot.freshness?.activity.status === 'live' && liveUsageSnapshot.freshness?.quotas.status === 'live', 'Usage snapshot exposes independent live freshness for activity and limits');
+  assert(liveUsageSnapshot.isRefreshing === false, 'Usage refresh state settles after both adapters complete');
+
   // 10. Test compact HUD projection and command-center bridge
   console.log('\n10. Testing Compact Subscription HUD...');
   const compactUsage = {
@@ -331,6 +356,15 @@ async function runTests() {
   assert(keyProviders.find(metric => metric.id === 'claude')?.basis === 'quota', 'Claude cell is explicitly labeled as subscription quota');
   assert(keyProviders.find(metric => metric.id === 'grok')?.percent === 5, 'Grok falls back to measured activity share when no quota feed exists');
   assert(keyProviders.find(metric => metric.id === 'opencode')?.basis === 'activity_share', 'OpenCode never presents activity share as subscription quota');
+
+  const grokQuotaProviders = buildKeyProviderMetrics({
+    ...compactUsage,
+    quotas: [
+      ...quotas,
+      { provider: 'Grok Build', label: 'Weekly', usedPercent: 74, remainingPercent: 26, status: 'watch' as const },
+    ],
+  });
+  assert(grokQuotaProviders.find(metric => metric.id === 'grok')?.percent === 74, 'Grok uses its authenticated Build quota when Tokscale exposes it');
 
   let probeCalls = 0;
   const commandCenter = new CommandCenterBridge(async () => {

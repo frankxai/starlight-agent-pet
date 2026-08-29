@@ -5,6 +5,7 @@ import path from 'path';
 import {
   ConsolidatedUsageSnapshot,
   ProviderQuotaWindow,
+  UsageLaneFreshness,
   UsageShare,
 } from './types';
 
@@ -47,6 +48,19 @@ interface TokscaleQuotaProvider {
 
 type CommandRunner = (args: string[], timeoutMs: number) => Promise<string>;
 
+interface UsageIntelligenceOptions {
+  dailyRefreshMs?: number;
+  quotaRefreshMs?: number;
+  dailyStaleMs?: number;
+  quotaStaleMs?: number;
+  cachePath?: string | false;
+}
+
+const DEFAULT_DAILY_REFRESH_MS = 5 * 60_000;
+const DEFAULT_QUOTA_REFRESH_MS = 60_000;
+const DEFAULT_DAILY_STALE_MS = 10 * 60_000;
+const DEFAULT_QUOTA_STALE_MS = 2 * 60_000;
+
 const EMPTY_TOTALS: ConsolidatedUsageSnapshot['totals'] = {
   freshInputTokens: 0,
   outputTokens: 0,
@@ -75,6 +89,11 @@ function percent(part: number, total: number): number {
 function cleanLabel(value: unknown, fallback: string): string {
   const label = String(value || fallback).trim();
   return label.slice(0, 80);
+}
+
+function positiveInterval(value: unknown, fallback: number, minimum: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum ? parsed : fallback;
 }
 
 function aggregateShares(
@@ -255,11 +274,37 @@ export class UsageIntelligence {
   private quotaUpdatedAt = 0;
   private dailyInFlight: Promise<void> | null = null;
   private quotaInFlight: Promise<void> | null = null;
+  private dailyTimer: NodeJS.Timeout | null = null;
+  private quotaTimer: NodeJS.Timeout | null = null;
+  private started = false;
+  private readonly dailyRefreshMs: number;
+  private readonly quotaRefreshMs: number;
+  private readonly dailyStaleMs: number;
+  private readonly quotaStaleMs: number;
+  private readonly cachePath: string | null;
 
   constructor(
     private runCommand: CommandRunner = defaultCommandRunner,
     private autoRefresh = true,
+    options: UsageIntelligenceOptions = {},
   ) {
+    this.dailyRefreshMs = positiveInterval(
+      options.dailyRefreshMs ?? process.env.STARLIGHT_USAGE_REFRESH_MS,
+      DEFAULT_DAILY_REFRESH_MS,
+      30_000,
+    );
+    this.quotaRefreshMs = positiveInterval(
+      options.quotaRefreshMs ?? process.env.STARLIGHT_QUOTA_REFRESH_MS,
+      DEFAULT_QUOTA_REFRESH_MS,
+      15_000,
+    );
+    this.dailyStaleMs = positiveInterval(options.dailyStaleMs, DEFAULT_DAILY_STALE_MS, 60_000);
+    this.quotaStaleMs = positiveInterval(options.quotaStaleMs, DEFAULT_QUOTA_STALE_MS, 30_000);
+    this.cachePath = options.cachePath === false
+      ? null
+      : options.cachePath
+        || process.env.STARLIGHT_USAGE_CACHE_PATH
+        || path.join(os.homedir(), '.starlight', 'telemetry', 'usage-cache.json');
     this.snapshot = {
       status: 'loading',
       source: 'tokscale',
@@ -280,22 +325,57 @@ export class UsageIntelligence {
         note: 'Waiting for local usage telemetry.',
       },
     };
+    this.loadCache();
   }
 
   public start(): void {
-    if (!this.autoRefresh) return;
+    if (!this.autoRefresh || this.started) return;
+    this.started = true;
     // Quotas are fast and immediately useful. Run the heavier local-log scan
     // after them so startup never fans out multiple Tokscale processes.
     this.dailyUpdatedAt = Date.now();
     void this.refreshQuota().finally(() => this.refreshDaily());
+
+    this.quotaTimer = setInterval(() => void this.refreshQuota(), this.quotaRefreshMs);
+    this.dailyTimer = setInterval(() => void this.refreshDaily(), this.dailyRefreshMs);
+    this.quotaTimer.unref?.();
+    this.dailyTimer.unref?.();
+  }
+
+  public stop(): void {
+    this.started = false;
+    if (this.dailyTimer) clearInterval(this.dailyTimer);
+    if (this.quotaTimer) clearInterval(this.quotaTimer);
+    this.dailyTimer = null;
+    this.quotaTimer = null;
+  }
+
+  public async refreshNow(lanes: { daily?: boolean; quota?: boolean } = {}): Promise<void> {
+    const refreshDaily = lanes.daily ?? true;
+    const refreshQuota = lanes.quota ?? true;
+    const tasks: Promise<void>[] = [];
+    if (refreshDaily) tasks.push(this.refreshDaily());
+    if (refreshQuota) tasks.push(this.refreshQuota());
+    await Promise.all(tasks);
   }
 
   public getSnapshot(): ConsolidatedUsageSnapshot {
     const now = Date.now();
-    if (this.autoRefresh && !this.dailyInFlight && now - this.dailyUpdatedAt > 5 * 60_000) void this.refreshDaily();
-    if (this.autoRefresh && !this.quotaInFlight && now - this.quotaUpdatedAt > 60_000) void this.refreshQuota();
+    if (this.autoRefresh && !this.dailyInFlight && now - this.dailyUpdatedAt > this.dailyRefreshMs) void this.refreshDaily();
+    if (this.autoRefresh && !this.quotaInFlight && now - this.quotaUpdatedAt > this.quotaRefreshMs) void this.refreshQuota();
+    const activityFreshness = this.getFreshness(this.snapshot.observedAt, Boolean(this.dailyInFlight), this.dailyStaleMs, now);
+    const quotaFreshness = this.getFreshness(this.snapshot.quotaObservedAt, Boolean(this.quotaInFlight), this.quotaStaleMs, now);
+    const status = this.snapshot.observedAt && activityFreshness.status === 'stale'
+      ? 'stale'
+      : this.snapshot.status;
     return {
       ...this.snapshot,
+      status,
+      isRefreshing: Boolean(this.dailyInFlight || this.quotaInFlight),
+      freshness: {
+        activity: activityFreshness,
+        quotas: quotaFreshness,
+      },
       totals: { ...this.snapshot.totals },
       cost: { ...this.snapshot.cost },
       byHarness: this.snapshot.byHarness.map(item => ({ ...item })),
@@ -306,6 +386,53 @@ export class UsageIntelligence {
         measuredHarnesses: [...this.snapshot.coverage.measuredHarnesses],
       },
     };
+  }
+
+  private getFreshness(
+    observedAt: string | undefined,
+    refreshing: boolean,
+    staleAfterMs: number,
+    now: number,
+  ): UsageLaneFreshness {
+    const observedTime = observedAt ? Date.parse(observedAt) : NaN;
+    if (!Number.isFinite(observedTime)) {
+      return { status: refreshing ? 'refreshing' : 'unavailable', ageMs: null };
+    }
+    const ageMs = Math.max(0, now - observedTime);
+    return {
+      status: refreshing ? 'refreshing' : ageMs > staleAfterMs ? 'stale' : 'live',
+      observedAt,
+      ageMs,
+    };
+  }
+
+  private loadCache(): void {
+    if (!this.cachePath) return;
+    try {
+      const cached = JSON.parse(fs.readFileSync(this.cachePath, 'utf8')) as ConsolidatedUsageSnapshot;
+      if (cached?.source !== 'tokscale' || !cached.totals || !Array.isArray(cached.byHarness) || !Array.isArray(cached.byModel)) return;
+      this.snapshot = {
+        ...this.snapshot,
+        ...cached,
+        status: cached.observedAt ? 'stale' : 'loading',
+        isRefreshing: false,
+        error: undefined,
+      };
+    } catch {
+      // First launch or a damaged cache falls back to a fresh local scan.
+    }
+  }
+
+  private persistCache(): void {
+    if (!this.cachePath) return;
+    try {
+      fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
+      const temporaryPath = `${this.cachePath}.${process.pid}.tmp`;
+      fs.writeFileSync(temporaryPath, JSON.stringify(this.snapshot), 'utf8');
+      fs.renameSync(temporaryPath, this.cachePath);
+    } catch {
+      // Cache persistence improves restart behavior but never blocks live telemetry.
+    }
   }
 
   private refreshDaily(): Promise<void> {
@@ -321,6 +448,7 @@ export class UsageIntelligence {
           status: 'ready',
           error: undefined,
         };
+        this.persistCache();
       } catch (error: any) {
         this.dailyUpdatedAt = Date.now();
         this.snapshot = {
@@ -347,6 +475,7 @@ export class UsageIntelligence {
           quotas,
           quotaObservedAt: new Date().toISOString(),
         };
+        this.persistCache();
       } catch {
         this.quotaUpdatedAt = Date.now();
         // Quota telemetry is additive. Preserve a valid daily snapshot if this provider call is unavailable.

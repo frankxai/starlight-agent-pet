@@ -7,14 +7,21 @@ const path = require('path');
 
 let mainWindow = null;
 let telemetryProcess = null;
+let activeTelemetryPort = null;
+let telemetryWatchdog = null;
+let telemetryRecovery = null;
+let quitting = false;
+let consecutiveTelemetryFailures = 0;
 
 const DEFAULT_PORT = Number(process.env.STARLIGHT_TELEMETRY_PORT || 9224);
 const COMPACT_HEIGHT = 96;
 const EXPANDED_HEIGHT = 690;
 const HUD_WIDTH = 760;
 const EDGE_GAP = 16;
+const TELEMETRY_WATCHDOG_MS = 10_000;
 
 app.setName('Starlight Agent Pet');
+app.setAppUserModelId('ai.frankx.starlight-agent-pet');
 app.setPath(
   'userData',
   process.env.STARLIGHT_DESKTOP_STATE_DIR || path.join(app.getPath('appData'), 'Starlight Agent Pet'),
@@ -37,6 +44,31 @@ function clamp(value, minimum, maximum) {
 
 function windowStatePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
+}
+
+function loginItemOptions() {
+  if (app.isPackaged) {
+    return { path: process.execPath, args: ['--starlight-autostart'] };
+  }
+  return {
+    path: process.execPath,
+    args: [path.join(__dirname, 'main.js'), '--starlight-autostart'],
+  };
+}
+
+function setLaunchAtLogin(enabled) {
+  if (process.platform !== 'win32') return;
+  const options = loginItemOptions();
+  app.setLoginItemSettings({ ...options, openAtLogin: Boolean(enabled) });
+}
+
+function launchesAtLogin() {
+  if (process.platform !== 'win32') return false;
+  try {
+    return app.getLoginItemSettings(loginItemOptions()).openAtLogin;
+  } catch {
+    return false;
+  }
 }
 
 function loadWindowPosition() {
@@ -62,7 +94,7 @@ function saveWindowPosition() {
 
 function probeTelemetry(port) {
   return new Promise((resolve) => {
-    const request = http.get({ hostname: '127.0.0.1', port, path: '/api/health', timeout: 700 }, (response) => {
+    const request = http.get({ hostname: '127.0.0.1', port, path: '/api/health', timeout: 1_500 }, (response) => {
       response.resume();
       resolve(response.statusCode === 200);
     });
@@ -92,7 +124,7 @@ async function waitForTelemetry(port, childProcess) {
   childProcess.once('error', (error) => {
     launchError = error;
   });
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 160; attempt += 1) {
     if (await probeTelemetry(port)) return;
     if (launchError) throw launchError;
     if (childProcess.exitCode != null) break;
@@ -102,21 +134,74 @@ async function waitForTelemetry(port, childProcess) {
 }
 
 async function ensureTelemetry() {
+  if (activeTelemetryPort && await probeTelemetry(activeTelemetryPort)) return activeTelemetryPort;
   if (await probeTelemetry(DEFAULT_PORT)) return DEFAULT_PORT;
+
+  if (telemetryProcess && telemetryProcess.exitCode == null) {
+    telemetryProcess.kill();
+    telemetryProcess = null;
+  }
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const nodeBinary = process.env.STARLIGHT_NODE_BINARY || 'node';
-  telemetryProcess = spawn(nodeBinary, [path.join(__dirname, '..', 'bin', 'starlight-pet.js'), 'daemon'], {
+  const childProcess = spawn(nodeBinary, [path.join(__dirname, '..', 'bin', 'starlight-pet.js'), 'daemon'], {
     cwd: path.join(__dirname, '..'),
     env: { ...process.env, STARLIGHT_TELEMETRY_PORT: String(port) },
     stdio: 'ignore',
     windowsHide: true,
   });
-  telemetryProcess.once('exit', () => {
-    telemetryProcess = null;
+  telemetryProcess = childProcess;
+  childProcess.once('exit', () => {
+    if (telemetryProcess === childProcess) telemetryProcess = null;
+    if (!quitting) setTimeout(() => void recoverTelemetry(), 1_000);
   });
-  await waitForTelemetry(port, telemetryProcess);
+  await waitForTelemetry(port, childProcess);
+  activeTelemetryPort = port;
   return port;
+}
+
+async function recoverTelemetry() {
+  if (quitting) return;
+  if (telemetryRecovery) return telemetryRecovery;
+  telemetryRecovery = (async () => {
+    const previousPort = activeTelemetryPort;
+    if (previousPort && await probeTelemetry(previousPort)) return previousPort;
+    const port = await ensureTelemetry();
+    activeTelemetryPort = port;
+    if (mainWindow && !mainWindow.isDestroyed() && previousPort && port !== previousPort) {
+      await mainWindow.loadURL(`http://127.0.0.1:${port}/?mode=compact&desktop=1`);
+    }
+    return port;
+  })().catch((error) => {
+    console.error('[Starlight desktop] Telemetry recovery failed:', error);
+    return null;
+  }).finally(() => {
+    telemetryRecovery = null;
+  });
+  return telemetryRecovery;
+}
+
+async function monitorTelemetry() {
+  if (quitting || !activeTelemetryPort) return;
+  if (await probeTelemetry(activeTelemetryPort)) {
+    consecutiveTelemetryFailures = 0;
+    return;
+  }
+  consecutiveTelemetryFailures += 1;
+  if (consecutiveTelemetryFailures < 4) return;
+  consecutiveTelemetryFailures = 0;
+  await recoverTelemetry();
+}
+
+function startTelemetryWatchdog() {
+  if (telemetryWatchdog) return;
+  telemetryWatchdog = setInterval(() => void monitorTelemetry(), TELEMETRY_WATCHDOG_MS);
+  telemetryWatchdog.unref?.();
+}
+
+function stopTelemetryWatchdog() {
+  if (telemetryWatchdog) clearInterval(telemetryWatchdog);
+  telemetryWatchdog = null;
 }
 
 function resizeHud(expanded) {
@@ -133,6 +218,12 @@ function resizeHud(expanded) {
 function createContextMenu() {
   return Menu.buildFromTemplate([
     { label: 'Open command center', click: () => shell.openExternal('http://127.0.0.1:4321/ops') },
+    {
+      label: 'Launch at sign-in',
+      type: 'checkbox',
+      checked: launchesAtLogin(),
+      click: (item) => setLaunchAtLogin(item.checked),
+    },
     { type: 'separator' },
     { label: 'Quit Starlight', click: () => app.quit() },
   ]);
@@ -140,6 +231,7 @@ function createContextMenu() {
 
 async function createWindow() {
   const port = await ensureTelemetry();
+  activeTelemetryPort = port;
   const { workArea } = screen.getPrimaryDisplay();
   const width = Math.min(HUD_WIDTH, workArea.width - EDGE_GAP * 2);
   const savedPosition = loadWindowPosition();
@@ -196,6 +288,10 @@ async function createWindow() {
     return { action: 'deny' };
   });
   mainWindow.webContents.on('context-menu', () => createContextMenu().popup({ window: mainWindow }));
+  mainWindow.webContents.on('render-process-gone', () => {
+    if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
+    setTimeout(() => mainWindow?.reload(), 1_000);
+  });
 
   mainWindow.on('close', saveWindowPosition);
   mainWindow.on('closed', () => {
@@ -207,6 +303,12 @@ function stopOwnedTelemetry() {
   if (!telemetryProcess) return;
   telemetryProcess.kill();
   telemetryProcess = null;
+}
+
+function shutDownRuntime() {
+  quitting = true;
+  stopTelemetryWatchdog();
+  stopOwnedTelemetry();
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -222,6 +324,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    if (process.env.STARLIGHT_DISABLE_AUTO_START !== '1') setLaunchAtLogin(true);
     ipcMain.on('starlight:set-expanded', (_event, expanded) => resizeHud(Boolean(expanded)));
     ipcMain.on('starlight:open-command-center', (_event, url) => {
       try {
@@ -231,18 +334,20 @@ if (!hasSingleInstanceLock) {
       }
     });
 
-    createWindow().catch((error) => {
+    createWindow().then(startTelemetryWatchdog).catch((error) => {
       console.error('[Starlight desktop] Startup failed:', error);
       dialog.showErrorBox('Starlight could not start', error instanceof Error ? error.message : String(error));
       app.quit();
     });
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow().then(startTelemetryWatchdog).catch(console.error);
+      }
     });
   });
 
-  app.on('before-quit', stopOwnedTelemetry);
+  app.on('before-quit', shutDownRuntime);
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });

@@ -12,7 +12,7 @@ export class FileSystemWatcher {
     this.aggregator = aggregator;
   }
 
-  public start(pollIntervalMs = 2000) {
+  public start(pollIntervalMs = 5000) {
     if (this.watchInterval) return;
 
     const home = os.homedir();
@@ -20,8 +20,8 @@ export class FileSystemWatcher {
     const brainDir = path.join(home, '.gemini', 'antigravity', 'brain');
     const codexDir = path.join(home, '.codex');
 
-    // Run initial parse
-    this.poll();
+    // Let the loopback server bind before the first heavier cross-harness scan.
+    this.debouncedPoll();
 
     // Set up polling interval to ensure reliable cross-platform updates
     this.watchInterval = setInterval(() => {
@@ -48,6 +48,10 @@ export class FileSystemWatcher {
     if (this.watchInterval) {
       clearInterval(this.watchInterval);
       this.watchInterval = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
   }
 
