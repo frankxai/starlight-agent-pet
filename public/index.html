@@ -233,18 +233,221 @@
       </div>
     </section>
 
-    <!-- Inference Router Intelligence -->
-    <section>
+    <!-- Inference Router Intelligence & Playground -->
+    <section style="margin-bottom: 32px;">
       <div class="section-title">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan-glow);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <span>Inference router intelligence</span>
         </div>
-        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Model registry and capabilities</span>
+        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Unified model registry & cross-model verification engine</span>
       </div>
-      <div class="glass-panel" style="padding: 16px;">
-        <div id="model-registry-grid" style="display: flex; flex-wrap: wrap; gap: 10px;">
+      
+      <div class="glass-panel model-registry-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="eyebrow">Active model fabric</div>
+          <span id="registry-count-badge" class="micro-stat">14 models · 9 providers</span>
+        </div>
+        <div id="model-registry-grid" class="model-pill-grid">
           <!-- Dynamically injected model pills -->
+        </div>
+
+        <!-- Interactive Router Playground -->
+        <div class="router-playground">
+          <div class="playground-header">
+            <div>
+              <span class="eyebrow">Interactive routing simulator</span>
+              <h3 style="margin: 0; font-size: 14px; color: #fff;">Simulate real-time model dispatch</h3>
+            </div>
+            <span class="micro-stat">Maker ≠ Checker logic</span>
+          </div>
+
+          <form id="router-playground-form" class="playground-form" onsubmit="event.preventDefault();">
+            <div class="form-group">
+              <label for="route-task-shape">Task shape</label>
+              <select id="route-task-shape" class="form-select">
+                <option value="code_generation">Code generation</option>
+                <option value="code_review">Code review</option>
+                <option value="deep_reasoning">Deep reasoning</option>
+                <option value="fast_research">Fast research</option>
+                <option value="creative_media">Creative media</option>
+                <option value="local_private">Local / Private silicon</option>
+                <option value="mechanical_scan">Mechanical scan</option>
+                <option value="conversation">Conversation</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="route-context-used">Context tokens used</label>
+              <input id="route-context-used" type="number" class="form-input" value="45000" min="0" max="2000000" step="5000">
+            </div>
+
+            <div class="form-group">
+              <label for="route-budget">Remaining budget (USD)</label>
+              <input id="route-budget" type="number" class="form-input" value="10.00" min="0" max="100" step="1.00">
+            </div>
+
+            <div class="form-group">
+              <label for="route-maker-model">Previous model (Maker)</label>
+              <select id="route-maker-model" class="form-select">
+                <option value="">None (Single-agent)</option>
+                <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Anthropic)</option>
+                <option value="gpt-5.6-sol">GPT-5.6 Sol (OpenAI)</option>
+                <option value="gemini-3.7-pro">Gemini 3.7 Pro (Google)</option>
+                <option value="grok-4.5">Grok 4.5 (xAI)</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input id="route-req-vision" type="checkbox"> Require vision
+                </label>
+                <label class="checkbox-label">
+                  <input id="route-req-thinking" type="checkbox"> Extended thinking
+                </label>
+                <label class="checkbox-label">
+                  <input id="route-prefer-local" type="checkbox"> Prefer local silicon
+                </label>
+                <button id="btn-run-route" type="button" class="btn-route" style="margin-left: auto;">⚡ Route Task</button>
+              </div>
+            </div>
+          </form>
+
+          <div id="routing-result-box" class="routing-result-box">
+            <div class="result-main">
+              <div>
+                <span class="eyebrow" style="color: var(--cyan-glow);">Selected model</span>
+                <div id="result-model-name" class="result-model-title">—</div>
+              </div>
+              <div style="text-align: right;">
+                <span class="eyebrow">Estimated cost</span>
+                <div id="result-cost" style="font-size: 15px; font-family: var(--font-mono); color: var(--emerald-glow); font-weight: 700;">—</div>
+              </div>
+            </div>
+            <p id="result-reason" class="result-reason">—</p>
+
+            <div id="verifier-banner" class="verifier-banner" style="display: none;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--violet-glow);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span><strong>Cross-Model Verifier:</strong> <span id="result-verifier-name">—</span> (Enforcing Maker ≠ Checker doctrine)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Historical Telemetry & Trend Analytics -->
+    <section class="analytics-section">
+      <div class="section-title">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--emerald-glow);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Historical telemetry trends</span>
+        </div>
+        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">NDJSON-backed rolling daily telemetry</span>
+      </div>
+
+      <div class="glass-panel analytics-card">
+        <div class="analytics-stats-strip">
+          <div class="metric-card metric-card-plain">
+            <div class="metric-label"><span>Trend window</span><span>Range</span></div>
+            <div id="analytics-window-label" class="metric-value">14 Days</div>
+            <div class="metric-sub">Rolling daily aggregates</div>
+          </div>
+          <div class="metric-card metric-card-plain metric-accent-emerald">
+            <div class="metric-label"><span>Window tokens</span><span>Total</span></div>
+            <div id="analytics-total-tokens" class="metric-value">—</div>
+            <div class="metric-sub">Sum of all processed tokens</div>
+          </div>
+          <div class="metric-card metric-card-plain metric-accent-violet">
+            <div class="metric-label"><span>Window cost</span><span>USD</span></div>
+            <div id="analytics-total-cost" class="metric-value">—</div>
+            <div class="metric-sub">Metered-equivalent value</div>
+          </div>
+          <div class="metric-card metric-card-plain">
+            <div class="metric-label"><span>Peak daily burn</span><span>Velocity</span></div>
+            <div id="analytics-peak-tokens" class="metric-value">—</div>
+            <div id="analytics-peak-date" class="metric-sub">—</div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <svg id="analytics-svg-chart" class="svg-trend-chart" viewBox="0 0 800 180" preserveAspectRatio="none">
+            <!-- Dynamic SVG Area + Line chart -->
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Estate Gateway: Command Center & Product Constellations -->
+    <section>
+      <div class="section-title">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--gold-glow);"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span>Starlight estate gateway</span>
+        </div>
+        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Direct seams to estate control surfaces</span>
+      </div>
+
+      <div class="glass-panel estate-gateway-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="estate-cmd-dot" class="command-dot is-online" style="width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span>
+            <div>
+              <span class="eyebrow">Local control plane</span>
+              <h3 style="margin: 0; font-size: 15px; color: #fff;">Starlight Command Center</h3>
+            </div>
+          </div>
+          <span id="estate-cmd-status" class="micro-stat" style="color: var(--emerald-glow);">Online · 127.0.0.1:4321</span>
+        </div>
+
+        <div class="estate-routes-grid">
+          <a href="http://127.0.0.1:4321/" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>⚡ Operations</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">Live agent sessions & today view</div>
+          </a>
+
+          <a href="http://127.0.0.1:4321/studio" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>🎛️ Swarm Studio</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">Agent teams, benchmarks & packs</div>
+          </a>
+
+          <a href="http://127.0.0.1:4321/architecture" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>🏛️ Architecture Console</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">Repo graph, layers & recommendations</div>
+          </a>
+
+          <a href="http://127.0.0.1:4321/ops" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>🛡️ Ops & Queen Guard</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">Heartbeat pulse, queue & safe posture</div>
+          </a>
+
+          <a href="http://127.0.0.1:4321/fleet" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>🚢 Fleet Oversight</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">System pulse, git oversight & runs</div>
+          </a>
+
+          <a href="https://frankx.ai" target="_blank" rel="noopener" class="estate-route-item">
+            <div class="estate-route-name">
+              <span>🌐 FrankX.AI Portal</span>
+              <span class="estate-route-arrow">↗</span>
+            </div>
+            <div class="estate-route-note">Public creator platform & prompt library</div>
+          </a>
         </div>
       </div>
     </section>

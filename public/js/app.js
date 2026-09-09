@@ -709,4 +709,249 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
+
+  // --- 1. Model Registry ---
+  const modelRegistryGrid = document.getElementById('model-registry-grid');
+  const registryCountBadge = document.getElementById('registry-count-badge');
+
+  function initModelRegistry() {
+    if (!modelRegistryGrid) return;
+    fetch('/api/router/registry')
+      .then(res => res.json())
+      .then(models => {
+        if (!Array.isArray(models) || models.length === 0) return;
+        if (registryCountBadge) {
+          const providers = new Set(models.map(m => m.provider));
+          registryCountBadge.textContent = `${models.length} models · ${providers.size} providers`;
+        }
+
+        const providerIcons = {
+          anthropic: '🟠',
+          google: '🔵',
+          openai: '🟢',
+          xai: '🔴',
+          deepseek: '🟣',
+          kilo: '🟡',
+          groq: '🌸',
+          ollama: '🔮',
+          nvidia: '💚'
+        };
+
+        modelRegistryGrid.innerHTML = models.map(m => {
+          const icon = providerIcons[m.provider] || '⚡';
+          const tierClass = `tier-${m.tier}`;
+          const caps = [];
+          if (m.supportsVision) caps.push('<span class="cap-tag" title="Vision Capable">👁️</span>');
+          if (m.supportsExtendedThinking) caps.push('<span class="cap-tag" title="Extended Thinking">💭</span>');
+          if (m.supportsToolUse) caps.push('<span class="cap-tag" title="Tool Calling">🛠️</span>');
+          if (m.isLocal) caps.push('<span class="cap-tag" title="Local Silicon">🔒</span>');
+
+          const costStr = m.tier === 'free' || m.tier === 'local' 
+            ? 'Free / Local' 
+            : `$${m.inputPerMTok}/$${m.outputPerMTok}/M`;
+
+          const ctxStr = m.maxContextTokens >= 1000000 
+            ? `${(m.maxContextTokens / 1000000).toFixed(0)}M ctx`
+            : `${Math.round(m.maxContextTokens / 1000)}k ctx`;
+
+          return `
+            <div class="model-pill">
+              <div class="model-pill-header">
+                <span class="model-pill-name">${icon} ${escapeHtml(m.displayName)}</span>
+                <span class="model-pill-tier ${tierClass}">${escapeHtml(m.tier)}</span>
+              </div>
+              <div class="model-pill-details">
+                <span>${ctxStr} · ${costStr}</span>
+                <div class="model-pill-caps">${caps.join('')}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      })
+      .catch(err => console.error('Failed to load model registry:', err));
+  }
+
+  // --- 2. Interactive Router Playground ---
+  function initRouterPlayground() {
+    const btnRoute = document.getElementById('btn-run-route');
+    const resultBox = document.getElementById('routing-result-box');
+    const modelNameEl = document.getElementById('result-model-name');
+    const costEl = document.getElementById('result-cost');
+    const reasonEl = document.getElementById('result-reason');
+    const verifierBanner = document.getElementById('verifier-banner');
+    const verifierNameEl = document.getElementById('result-verifier-name');
+
+    if (!btnRoute || !resultBox) return;
+
+    btnRoute.addEventListener('click', () => {
+      const taskShape = document.getElementById('route-task-shape')?.value || 'code_generation';
+      const contextTokensUsed = parseInt(document.getElementById('route-context-used')?.value || '45000', 10);
+      const budgetRemainingUSD = parseFloat(document.getElementById('route-budget')?.value || '10.0');
+      const previousModelId = document.getElementById('route-maker-model')?.value || undefined;
+      const requiresVision = document.getElementById('route-req-vision')?.checked || false;
+      const requiresExtendedThinking = document.getElementById('route-req-thinking')?.checked || false;
+      const preferLocal = document.getElementById('route-prefer-local')?.checked || false;
+
+      btnRoute.textContent = 'Routing…';
+      btnRoute.disabled = true;
+
+      fetch('/api/router/decide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskShape,
+          contextTokensUsed,
+          contextTokensMax: 200000,
+          budgetRemainingUSD,
+          dailyBudgetCapUSD: 50.0,
+          preferLocal,
+          requiresVision,
+          requiresExtendedThinking,
+          previousModelId
+        })
+      })
+      .then(res => res.json())
+      .then(decision => {
+        btnRoute.textContent = '⚡ Route Task';
+        btnRoute.disabled = false;
+
+        if (decision.error) {
+          alert('Router error: ' + decision.error);
+          return;
+        }
+
+        resultBox.style.display = 'block';
+        if (modelNameEl) modelNameEl.textContent = `${decision.selectedModel.displayName} (${decision.selectedModel.provider.toUpperCase()} · ${decision.selectedModel.tier.toUpperCase()})`;
+        if (costEl) costEl.textContent = `$${decision.estimatedCostUSD.toFixed(4)}`;
+        if (reasonEl) reasonEl.textContent = decision.reason;
+
+        if (decision.crossModelVerifier && verifierBanner && verifierNameEl) {
+          verifierBanner.style.display = 'flex';
+          verifierNameEl.textContent = `${decision.crossModelVerifier.displayName} (${decision.crossModelVerifier.provider.toUpperCase()})`;
+        } else if (verifierBanner) {
+          verifierBanner.style.display = 'none';
+        }
+      })
+      .catch(err => {
+        btnRoute.textContent = '⚡ Route Task';
+        btnRoute.disabled = false;
+        console.error('Routing simulation failed:', err);
+      });
+    });
+  }
+
+  // --- 3. Historical Analytics Trend Chart ---
+  function initAnalyticsTrend() {
+    const chartSvg = document.getElementById('analytics-svg-chart');
+    const totalTokensEl = document.getElementById('analytics-total-tokens');
+    const totalCostEl = document.getElementById('analytics-total-cost');
+    const peakTokensEl = document.getElementById('analytics-peak-tokens');
+    const peakDateEl = document.getElementById('analytics-peak-date');
+
+    if (!chartSvg) return;
+
+    fetch('/api/analytics/trend?days=14')
+      .then(res => res.json())
+      .then(trend => {
+        if (!Array.isArray(trend) || trend.length === 0) {
+          chartSvg.innerHTML = `
+            <line x1="40" y1="90" x2="760" y2="90" stroke="rgba(255,255,255,0.1)" stroke-dasharray="4 4" />
+            <text x="400" y="95" fill="rgba(255,255,255,0.3)" font-size="12" font-family="monospace" text-anchor="middle">No multi-day history recorded yet — day-boundary auto-flushes daily</text>
+          `;
+          return;
+        }
+
+        let sumTokens = 0;
+        let sumCost = 0;
+        let peakTokens = 0;
+        let peakDate = '—';
+
+        for (const pt of trend) {
+          sumTokens += Number(pt.totalTokens || 0);
+          sumCost += Number(pt.costUSD || 0);
+          if (pt.totalTokens > peakTokens) {
+            peakTokens = pt.totalTokens;
+            peakDate = pt.date;
+          }
+        }
+
+        if (totalTokensEl) totalTokensEl.textContent = formatCompact(sumTokens);
+        if (totalCostEl) totalCostEl.textContent = `$${sumCost.toFixed(3)}`;
+        if (peakTokensEl) peakTokensEl.textContent = formatCompact(peakTokens);
+        if (peakDateEl) peakDateEl.textContent = `Peak on ${peakDate}`;
+
+        const width = 800;
+        const height = 180;
+        const padX = 40;
+        const padY = 24;
+        const plotW = width - padX * 2;
+        const plotH = height - padY * 2;
+
+        const maxVal = Math.max(1, peakTokens);
+        const pts = trend.map((d, i) => {
+          const x = padX + (i / Math.max(1, trend.length - 1)) * plotW;
+          const y = (height - padY) - (d.totalTokens / maxVal) * plotH;
+          return { x, y, date: d.date, tokens: d.totalTokens };
+        });
+
+        const linePath = pts.reduce((acc, p, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
+        const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${height - padY} L ${pts[0].x.toFixed(1)} ${height - padY} Z`;
+
+        chartSvg.innerHTML = `
+          <defs>
+            <linearGradient id="areaGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+          <line class="chart-grid-line" x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" />
+          <line class="chart-grid-line" x1="${padX}" y1="${height / 2}" x2="${width - padX}" y2="${height / 2}" />
+          <line class="chart-grid-line" x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" />
+
+          <path d="${areaPath}" fill="url(#areaGlow)" />
+          <path d="${linePath}" fill="none" stroke="#00f0ff" stroke-width="2.5" />
+
+          ${pts.map(p => `
+            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#00f0ff" stroke="#06070a" stroke-width="2">
+              <title>${p.date}: ${p.tokens.toLocaleString()} tokens</title>
+            </circle>
+            <text x="${p.x.toFixed(1)}" y="${height - 6}" class="chart-axis-text" text-anchor="middle">${p.date.slice(5)}</text>
+          `).join('')}
+        `;
+      })
+      .catch(err => console.error('Failed to load analytics trend:', err));
+  }
+
+  // --- 4. Estate Gateway & Command Center Status ---
+  function initEstateGateway() {
+    const cmdDot = document.getElementById('estate-cmd-dot');
+    const cmdStatus = document.getElementById('estate-cmd-status');
+
+    fetch('/api/hud/compact')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.commandCenter) {
+          const cc = data.commandCenter;
+          const isOnline = cc.status === 'online';
+          if (cmdDot) {
+            cmdDot.className = `command-dot ${isOnline ? 'is-online' : 'is-offline'}`;
+            cmdDot.style.background = isOnline ? 'var(--emerald-glow)' : 'var(--rose-glow)';
+          }
+          if (cmdStatus) {
+            cmdStatus.textContent = isOnline 
+              ? `Online · 127.0.0.1:4321 (${cc.latencyMs ?? 0}ms)` 
+              : 'Offline · Start starlight-command-center';
+            cmdStatus.style.color = isOnline ? 'var(--emerald-glow)' : 'var(--rose-glow)';
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  // Initialize all enhancements
+  initModelRegistry();
+  initRouterPlayground();
+  initAnalyticsTrend();
+  initEstateGateway();
 });
+
