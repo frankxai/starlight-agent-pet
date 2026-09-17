@@ -6,6 +6,7 @@ import { TokenUsage } from '../engine/types';
 import { normalizeTokscaleDailyReport, normalizeTokscaleQuotaReport, UsageIntelligence } from '../engine/usage';
 import { buildKeyProviderMetrics } from '../engine/compact-hud';
 import { CommandCenterBridge } from '../engine/command-center';
+import { KNOWN_SERVICES, listActiveLocalServers, reapIdleServers } from '../engine/server-inspector';
 
 process.env.STARLIGHT_DISABLE_TOKSCALE = '1';
 
@@ -375,6 +376,16 @@ async function runTests() {
   const secondCommandSnapshot = await commandCenter.getSnapshot();
   assert(firstCommandSnapshot.status === 'online' && firstCommandSnapshot.surfaces.length === 5, 'Command Center bridge exposes fixed read-only surfaces');
   assert(secondCommandSnapshot.latencyMs === 12 && probeCalls === 1, 'Command Center health probe is cached instead of polling on every render');
+
+  // 11. Testing Server Inspector & Port Management...
+  console.log('\n11. Testing Server Inspector & Port Management...');
+  assert(KNOWN_SERVICES[4321]?.isStarlight === true, 'Command Center (4321) recognized as Starlight service');
+  assert(KNOWN_SERVICES[9224]?.isStarlight === true, 'Telemetry Daemon (9224) recognized as Starlight service');
+  assert(KNOWN_SERVICES[1234]?.isStarlight === false, 'LM Studio (1234) recognized as external service');
+  const localServers = await listActiveLocalServers();
+  assert(Array.isArray(localServers), 'listActiveLocalServers returns an array');
+  const reapMessage = await reapIdleServers();
+  assert(typeof reapMessage === 'string' && reapMessage.length > 0, 'reapIdleServers returns status string');
 
   // Clean up
   if (fs.existsSync(testDbPath)) {

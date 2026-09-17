@@ -6,6 +6,7 @@ import { FleetAggregator } from './aggregator';
 import { HookEventPayload, PetSkinId } from './types';
 import { InferenceRouter, RoutingContext } from './router';
 import { CompactHudService } from './compact-hud';
+import { listActiveLocalServers, stopServerByPort, reapIdleServers } from './server-inspector';
 
 export class TelemetryServer {
   private aggregator: FleetAggregator;
@@ -284,6 +285,52 @@ export class TelemetryServer {
         this.aggregator.snapshotTodayAnalytics();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', message: 'Snapshot saved' }));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/servers' && req.method === 'GET') {
+      try {
+        const servers = await listActiveLocalServers();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(servers));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/servers/stop' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', async () => {
+        try {
+          const { port } = JSON.parse(body);
+          if (!port) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Port required' }));
+            return;
+          }
+          const result = await stopServerByPort(Number(port));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    if (pathname === '/api/servers/reap' && req.method === 'POST') {
+      try {
+        const message = await reapIdleServers();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', message }));
       } catch (err: any) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));

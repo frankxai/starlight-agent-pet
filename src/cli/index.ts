@@ -2,6 +2,7 @@ import { FleetAggregator } from '../engine/aggregator';
 import { FileSystemWatcher } from '../engine/watcher';
 import { TelemetryServer } from '../engine/server';
 import { PetSkinId } from '../engine/types';
+import { listActiveLocalServers, stopServerByPort, reapIdleServers } from '../engine/server-inspector';
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -106,6 +107,68 @@ export async function runCli(args: string[]) {
       break;
     }
 
+    case 'servers':
+    case 'ports': {
+      console.log('\n\x1b[1m\x1b[36m✦ ACTIVE LOCALHOST SERVERS & RAM FOOTPRINT ✦\x1b[0m\n');
+      const servers = await listActiveLocalServers();
+      if (servers.length === 0) {
+        console.log('  \x1b[2mNo listening servers detected between ports 1024–10000.\x1b[0m\n');
+      } else {
+        console.log(
+          rPad('PORT', 8) +
+          rPad('PID', 8) +
+          rPad('RAM (MB)', 12) +
+          rPad('PROCESS', 14) +
+          rPad('SERVICE NAME', 32) +
+          'URL'
+        );
+        console.log('─'.repeat(96));
+
+        let totalRam = 0;
+        for (const s of servers) {
+          totalRam += s.ramMB;
+          const starIcon = s.isStarlight ? '✦ ' : '  ';
+          const nameColor = s.isStarlight ? '\x1b[36m' : '\x1b[0m';
+          console.log(
+            rPad(String(s.port), 8) +
+            rPad(String(s.pid), 8) +
+            rPad(`${s.ramMB.toFixed(1)} MB`, 12) +
+            rPad(s.processName, 14) +
+            rPad(`${nameColor}${starIcon}${s.serviceName}\x1b[0m`, 32) +
+            `\x1b[2m${s.url}\x1b[0m`
+          );
+        }
+        console.log('─'.repeat(96));
+        console.log(`\x1b[1mTOTAL MEASURED RAM:\x1b[0m \x1b[33m${totalRam.toFixed(1)} MB\x1b[0m across ${servers.length} listening services.`);
+        console.log('\x1b[2mRun "starlight-pet stop <port>" to terminate a service, or "starlight-pet reap" to kill idle dev servers.\x1b[0m\n');
+      }
+      break;
+    }
+
+    case 'stop':
+    case 'kill': {
+      const portArg = parseInt(args[1], 10);
+      if (isNaN(portArg)) {
+        console.log('\x1b[31m[!] Please specify a port to stop. Example: starlight-pet stop 9224\x1b[0m');
+        break;
+      }
+      console.log(`\x1b[33m[!] Stopping process on port ${portArg}...\x1b[0m`);
+      const res = await stopServerByPort(portArg);
+      if (res.success) {
+        console.log(`\x1b[32m[✓] Successfully terminated process (PID: ${res.pid}) on port ${portArg}.\x1b[0m`);
+      } else {
+        console.log(`\x1b[31m[!] Failed to stop port ${portArg}: ${res.error}\x1b[0m`);
+      }
+      break;
+    }
+
+    case 'reap': {
+      console.log('\x1b[35m[+] Reaping idle Starlight development servers past TTL...\x1b[0m');
+      const result = await reapIdleServers();
+      console.log(result);
+      break;
+    }
+
     case 'help':
     default: {
       console.log(`
@@ -114,6 +177,9 @@ export async function runCli(args: string[]) {
 Commands:
   \x1b[36mstarlight-pet status\x1b[0m         View live fleet status and pet mood in terminal
   \x1b[36mstarlight-pet prompt\x1b[0m         One-line statusline string for shell prompts
+  \x1b[36mstarlight-pet servers\x1b[0m        Inspect all running localhost ports, PIDs & RAM usage
+  \x1b[36mstarlight-pet stop <port>\x1b[0m    Stop a local dev server by port to reclaim RAM
+  \x1b[36mstarlight-pet reap\x1b[0m           Reap idle dev servers past TTL via SDS
   \x1b[36mstarlight-pet hud\x1b[0m            Launch interactive floating pet and full Observatory HUD
   \x1b[36mstarlight-pet mini\x1b[0m           Launch the two-row provider HUD with expandable details
   \x1b[36mstarlight-pet daemon\x1b[0m         Run background telemetry bridge server (port 9224)
@@ -123,6 +189,7 @@ Commands:
   \x1b[36mstarlight-pet report --json\x1b[0m  Output raw JSON telemetry
   \x1b[36mstarlight-pet hooks install\x1b[0m  Install drop-in lifecycle hooks into Claude Code
       `);
+
       break;
     }
   }

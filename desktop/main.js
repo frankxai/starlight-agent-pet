@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, Tray, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
@@ -12,6 +12,7 @@ let telemetryWatchdog = null;
 let telemetryRecovery = null;
 let quitting = false;
 let consecutiveTelemetryFailures = 0;
+let tray = null;
 
 const DEFAULT_PORT = Number(process.env.STARLIGHT_TELEMETRY_PORT || 9224);
 const COMPACT_HEIGHT = 96;
@@ -229,6 +230,93 @@ function createContextMenu() {
   ]);
 }
 
+function createTrayIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#00f0ff"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+}
+
+function buildTrayMenu() {
+  const isVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
+  return Menu.buildFromTemplate([
+    {
+      label: isVisible ? 'Hide Starlight HUD' : 'Show Starlight HUD',
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Local Services & Port Status',
+      enabled: false,
+    },
+    {
+      label: `● Telemetry Engine (:9224) - Active`,
+      click: () => shell.openExternal(`http://127.0.0.1:${activeTelemetryPort || DEFAULT_PORT}`),
+    },
+    {
+      label: '● Command Center (:4321)',
+      click: () => shell.openExternal('http://127.0.0.1:4321/ops'),
+    },
+    { type: 'separator' },
+    {
+      label: 'Reap Idle Dev Servers (sds reap)',
+      click: () => {
+        const { exec } = require('child_process');
+        exec('sds reap', (err, stdout) => {
+          if (err) console.error('[Starlight desktop] sds reap error:', err);
+          else console.log('[Starlight desktop] sds reap:', stdout);
+        });
+      },
+    },
+    {
+      label: 'Launch at sign-in',
+      type: 'checkbox',
+      checked: launchesAtLogin(),
+      click: (item) => setLaunchAtLogin(item.checked),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Starlight',
+      click: () => app.quit(),
+    },
+  ]);
+}
+
+function setupTray() {
+  if (tray && !tray.isDestroyed()) return;
+  try {
+    const icon = createTrayIcon();
+    tray = new Tray(icon);
+    tray.setToolTip('Starlight Constellation & Telemetry Switchboard');
+    tray.setContextMenu(buildTrayMenu());
+
+    tray.on('click', () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+
+    tray.on('right-click', () => {
+      if (tray && !tray.isDestroyed()) {
+        tray.setContextMenu(buildTrayMenu());
+      }
+    });
+  } catch (err) {
+    console.error('[Starlight desktop] Tray creation error:', err);
+  }
+}
+
+
 async function createWindow() {
   const port = await ensureTelemetry();
   activeTelemetryPort = port;
@@ -309,6 +397,10 @@ function shutDownRuntime() {
   quitting = true;
   stopTelemetryWatchdog();
   stopOwnedTelemetry();
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -334,7 +426,10 @@ if (!hasSingleInstanceLock) {
       }
     });
 
-    createWindow().then(startTelemetryWatchdog).catch((error) => {
+    createWindow().then(() => {
+      setupTray();
+      startTelemetryWatchdog();
+    }).catch((error) => {
       console.error('[Starlight desktop] Startup failed:', error);
       dialog.showErrorBox('Starlight could not start', error instanceof Error ? error.message : String(error));
       app.quit();
