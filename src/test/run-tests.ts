@@ -439,9 +439,10 @@ async function runTests() {
   assert(mockMissingByModelSnapshot.allModels.length === 1 && mockMissingByModelSnapshot.allModels[0].id === 'claude', 'allModels filters out models with 0 processed tokens');
 
 
-  const defaultFreshnessService = new CompactHudService({ getSnapshot: () => compactUsage as any });
+  const mockOfflineCommandCenter = new CommandCenterBridge(async () => ({ online: false, latencyMs: null }), 1000, () => 0);
+  const defaultFreshnessService = new CompactHudService({ getSnapshot: () => compactUsage as any }, mockOfflineCommandCenter);
   const defaultFreshnessSnapshot = await defaultFreshnessService.getSnapshot();
-  assert(defaultFreshnessSnapshot.commandCenter.status === 'offline' || defaultFreshnessSnapshot.commandCenter.status === 'online', 'CommandCenter default instantiation works');
+  assert(defaultFreshnessSnapshot.commandCenter.status === 'offline', 'CommandCenter dependency injection resolves deterministic offline mock');
 
   const zeroTotalsUsage = {
     ...emptyUsage,
