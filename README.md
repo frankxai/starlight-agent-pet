@@ -78,7 +78,7 @@ pnpm build
 
 ### 2. View terminal status
 ```bash
-node bin/starlight-pet.js status
+pnpm run cli status
 ```
 
 ### 3. Launch the native floating desktop companion
@@ -94,7 +94,7 @@ Quota windows and daily activity are separate live lanes. Authenticated provider
 ### 4. Launch the full observatory in a browser
 
 ```bash
-node bin/starlight-pet.js hud
+pnpm run hud
 ```
 *Opens `http://localhost:9224` in your default browser with live WebSocket synchronization.*
 
@@ -103,7 +103,7 @@ The usage cockpit enriches the local parsers with the installed `tokscale` CLI. 
 ### 5. Launch the lightweight two-row view
 
 ```bash
-node bin/starlight-pet.js mini
+pnpm run cli mini
 ```
 
 The mini view uses the same loopback telemetry contract as the full observatory. Click it to reveal all detected models, detailed quota windows, and the Starlight command center destinations.

@@ -15,11 +15,11 @@ Use this skill when:
 
 ```bash
 # Terminal status overview
-node C:/Users/frank/starlight/repos/starlight-agent-pet/bin/starlight-pet.js status
+pnpm run cli status
 
 # Open interactive HUD
-node C:/Users/frank/starlight/repos/starlight-agent-pet/bin/starlight-pet.js hud
+pnpm run hud
 
 # Generate Markdown cost report
-node C:/Users/frank/starlight/repos/starlight-agent-pet/bin/starlight-pet.js report
+pnpm run cli report
 ```
