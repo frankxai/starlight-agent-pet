@@ -218,9 +218,13 @@ async function runTests() {
   const fs = await import('fs');
   const testDbPath = path.join(os.tmpdir(), 'test_history_' + Date.now() + '.ndjson');
   
+    const now = Date.now();
+  const todayStr = new Date(now).toISOString().split('T')[0];
+  const yesterdayStr = new Date(now - 86400000).toISOString().split('T')[0];
+  const dayBeforeStr = new Date(now - 2 * 86400000).toISOString().split('T')[0];
   const analytics = new HistoricalAnalytics(testDbPath);
   analytics.appendDailySummary({
-    date: new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0],
+    date: dayBeforeStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -232,7 +236,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0],
+    date: dayBeforeStr,
     harness: 'antigravity',
     model: 'gemini-3.7-flash',
     inputTokens: 2000,
@@ -244,7 +248,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: new Date(Date.now() - 1 * 86400000).toISOString().split('T')[0],
+    date: yesterdayStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -258,7 +262,7 @@ async function runTests() {
 
   const trend = await analytics.getDailyTrend(30);
   assert(trend.length === 2, 'Trend data returns 2 days of records');
-  assert(trend[0].date === new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0], 'First date is correct');
+  assert(trend[0].date === dayBeforeStr, 'First date is correct');
   assert(trend[0].totalTokens === 4500, `First day total tokens is correct (got ${trend[0].totalTokens})`);
   assert(trend[1].totalTokens === 2000, `Second day total tokens is correct (got ${trend[1].totalTokens})`);
 
@@ -419,10 +423,21 @@ async function runTests() {
   const metricsMulti = buildKeyProviderMetrics(multiQuotaUsage as any);
   assert(metricsMulti.find((m: any) => m.id === 'codex')?.percent === 80, 'selectQuota prefers the highest usedPercent');
 
-  const mockUsageSource = { getSnapshot: () => compactUsage as any };
-  const mockMissingByModelService = new CompactHudService(mockUsageSource, commandCenter);
+
+  const missingByModelUsage = {
+    ...compactUsage,
+    byModel: [
+      { id: 'random', label: 'Random', totalProcessedTokens: 0, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 0 },
+      { id: 'claude', label: 'Claude', provider: 'anthropic', totalProcessedTokens: 15, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 100 }
+    ]
+  };
+  const mockMissingByModel = { getSnapshot: () => missingByModelUsage as any };
+  const mockMissingByModelService = new CompactHudService(mockMissingByModel, commandCenter);
+
+
   const mockMissingByModelSnapshot = await mockMissingByModelService.getSnapshot();
-  assert(mockMissingByModelSnapshot.allModels.every((m: any) => m.totalProcessedTokens > 0), 'allModels filters out models with 0 processed tokens');
+  assert(mockMissingByModelSnapshot.allModels.length === 1 && mockMissingByModelSnapshot.allModels[0].id === 'claude', 'allModels filters out models with 0 processed tokens');
+
 
   const defaultFreshnessService = new CompactHudService({ getSnapshot: () => compactUsage as any });
   const defaultFreshnessSnapshot = await defaultFreshnessService.getSnapshot();
