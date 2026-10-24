@@ -219,7 +219,7 @@ async function runTests() {
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
   const yesterdayDate = new Date();
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
   const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
 
   const analytics = new HistoricalAnalytics(testDbPath);
