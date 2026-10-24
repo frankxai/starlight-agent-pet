@@ -216,9 +216,15 @@ async function runTests() {
   const fs = await import('fs');
   const testDbPath = path.join(os.tmpdir(), 'test_history_' + Date.now() + '.ndjson');
   
+  const todayDate = new Date();
+  const todayStr = todayDate.toISOString().split('T')[0];
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+
   const analytics = new HistoricalAnalytics(testDbPath);
   analytics.appendDailySummary({
-    date: '2026-08-25',
+    date: yesterdayStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -230,7 +236,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-08-25',
+    date: yesterdayStr,
     harness: 'antigravity',
     model: 'gemini-3.7-flash',
     inputTokens: 2000,
@@ -242,7 +248,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-08-26',
+    date: todayStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -256,7 +262,7 @@ async function runTests() {
 
   const trend = await analytics.getDailyTrend(30);
   assert(trend.length === 2, 'Trend data returns 2 days of records');
-  assert(trend[0].date === '2026-08-25', 'First date is correct');
+  assert(trend[0].date === yesterdayStr, 'First date is correct');
   assert(trend[0].totalTokens === 4500, `First day total tokens is correct (got ${trend[0].totalTokens})`);
   assert(trend[1].totalTokens === 2000, `Second day total tokens is correct (got ${trend[1].totalTokens})`);
 

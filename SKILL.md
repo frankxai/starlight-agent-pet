@@ -13,6 +13,8 @@ Use this skill when:
 
 ## Commands
 
+Run these commands from the repository root: `C:/Users/frank/starlight/repos/starlight-agent-pet`
+
 ```bash
 # Terminal status overview
 pnpm run cli status
