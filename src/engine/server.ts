@@ -168,7 +168,10 @@ export class TelemetryServer {
           res.end(JSON.stringify(decision));
         } catch (err: unknown) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unknown error') }));
+          let errorMessage: string | undefined;
+          if (err instanceof Error) errorMessage = err.message;
+          else if (err && typeof err === 'object' && 'message' in err) errorMessage = err.message as string | undefined;
+          res.end(JSON.stringify({ error: errorMessage }));
         }
       });
       return;
@@ -186,7 +189,10 @@ export class TelemetryServer {
           res.end(JSON.stringify({ status: 'ok', received: payload.event }));
         } catch (err: unknown) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unknown error') }));
+          let errorMessage: string | undefined;
+          if (err instanceof Error) errorMessage = err.message;
+          else if (err && typeof err === 'object' && 'message' in err) errorMessage = err.message as string | undefined;
+          res.end(JSON.stringify({ error: errorMessage }));
         }
       });
       return;
@@ -274,7 +280,10 @@ export class TelemetryServer {
         res.end(JSON.stringify(trend));
       } catch (err: unknown) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unknown error') }));
+        let errorMessage: string | undefined;
+        if (err instanceof Error) errorMessage = err.message;
+        else if (err && typeof err === 'object' && 'message' in err) errorMessage = err.message as string | undefined;
+        res.end(JSON.stringify({ error: errorMessage }));
       }
       return;
     }
@@ -286,7 +295,10 @@ export class TelemetryServer {
         res.end(JSON.stringify({ status: 'ok', message: 'Snapshot saved' }));
       } catch (err: unknown) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unknown error') }));
+        let errorMessage: string | undefined;
+        if (err instanceof Error) errorMessage = err.message;
+        else if (err && typeof err === 'object' && 'message' in err) errorMessage = err.message as string | undefined;
+        res.end(JSON.stringify({ error: errorMessage }));
       }
       return;
     }

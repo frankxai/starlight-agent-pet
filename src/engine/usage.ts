@@ -452,17 +452,17 @@ export class UsageIntelligence {
       } catch (error: unknown) {
         this.dailyUpdatedAt = Date.now();
 
-        let errorMessage = 'Tokscale daily usage unavailable';
+        let errorMessage: string | undefined;
         if (error instanceof Error) {
           errorMessage = error.message;
         } else if (error && typeof error === 'object' && 'message' in error) {
-          errorMessage = String(error.message);
+          errorMessage = error.message as string | undefined;
         }
 
         this.snapshot = {
           ...this.snapshot,
           status: this.snapshot.observedAt ? 'stale' : 'unavailable',
-          error: errorMessage,
+          error: errorMessage || 'Tokscale daily usage unavailable',
         };
       } finally {
         this.dailyInFlight = null;
