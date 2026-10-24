@@ -449,12 +449,12 @@ export class UsageIntelligence {
           error: undefined,
         };
         this.persistCache();
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.dailyUpdatedAt = Date.now();
         this.snapshot = {
           ...this.snapshot,
           status: this.snapshot.observedAt ? 'stale' : 'unavailable',
-          error: error?.message || 'Tokscale daily usage unavailable',
+          error: (error instanceof Error ? error.message : undefined) || 'Tokscale daily usage unavailable',
         };
       } finally {
         this.dailyInFlight = null;

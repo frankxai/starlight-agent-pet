@@ -68,8 +68,8 @@ export class TelemetryServer {
         resolve(this.port);
       });
 
-      this.server.on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
+      this.server.on('error', (err: unknown) => {
+        if (err && typeof err === 'object' && 'code' in err && err.code === 'EADDRINUSE') {
           console.warn(`[Starlight Fleet Observatory] Port ${this.port} busy, attempting port ${this.port + 1}...`);
           this.port += 1;
           this.server?.listen(this.port, this.host, () => {
@@ -90,7 +90,7 @@ export class TelemetryServer {
     this.aggregator.stop();
   }
 
-  public async broadcast(customMessage?: any) {
+  public async broadcast(customMessage?: unknown) {
     if (!this.wss || this.wss.clients.size === 0) return;
 
     try {
@@ -166,9 +166,9 @@ export class TelemetryServer {
           const decision = this.router.route(ctx);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(decision));
-        } catch (err: any) {
+        } catch (err: unknown) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
         }
       });
       return;
@@ -184,9 +184,9 @@ export class TelemetryServer {
           this.broadcast();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'ok', received: payload.event }));
-        } catch (err: any) {
+        } catch (err: unknown) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
         }
       });
       return;
@@ -272,9 +272,9 @@ export class TelemetryServer {
         const trend = await this.aggregator.analytics.getDailyTrend(days);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(trend));
-      } catch (err: any) {
+      } catch (err: unknown) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
       }
       return;
     }
@@ -284,9 +284,9 @@ export class TelemetryServer {
         this.aggregator.snapshotTodayAnalytics();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', message: 'Snapshot saved' }));
-      } catch (err: any) {
+      } catch (err: unknown) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
       }
       return;
     }

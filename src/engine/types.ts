@@ -67,7 +67,7 @@ export interface AgentToolCall {
   startedAt: number;
   durationMs?: number;
   status: 'running' | 'completed' | 'failed';
-  inputArgs?: Record<string, any>;
+  inputArgs?: Record<string, unknown>;
 }
 
 export interface PermissionRequest {
@@ -276,7 +276,7 @@ export interface HookEventPayload {
   workspace?: string;
   toolName?: string;
   toolSummary?: string;
-  toolArgs?: Record<string, any>;
+  toolArgs?: Record<string, unknown>;
   tokens?: Partial<TokenUsage>;
   contextRemainingPct?: number;
   machineTag?: string;

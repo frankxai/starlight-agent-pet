@@ -71,7 +71,7 @@ export class HistoricalAnalytics {
     const records = await this.readAllRecords();
     const filtered = this.filterByDays(records, days);
 
-    const trend: Record<string, any> = {};
+    const trend: Record<string, { date: string; totalTokens: number; costUSD: number; sessionsCount: number }> = {};
     for (const r of filtered) {
       if (!trend[r.date]) {
         trend[r.date] = {
@@ -93,7 +93,7 @@ export class HistoricalAnalytics {
     const records = await this.readAllRecords();
     const filtered = this.filterByDays(records, days);
 
-    const breakdown: Record<string, any> = {};
+    const breakdown: Record<string, { model: string; totalTokens: number; costUSD: number }> = {};
     for (const r of filtered) {
       if (!breakdown[r.model]) {
         breakdown[r.model] = {
@@ -112,7 +112,7 @@ export class HistoricalAnalytics {
     const records = await this.readAllRecords();
     const filtered = this.filterByDays(records, days);
 
-    const breakdown: Record<string, any> = {};
+    const breakdown: Record<string, { harness: string; totalTokens: number; costUSD: number }> = {};
     for (const r of filtered) {
       if (!breakdown[r.harness]) {
         breakdown[r.harness] = {
