@@ -60,16 +60,16 @@ export class HistoricalAnalytics {
     return records;
   }
 
-  private filterByDays(records: AnalyticsRecord[], days: number): AnalyticsRecord[] {
-    const cutoffDate = new Date();
+  private filterByDays(records: AnalyticsRecord[], days: number, now: Date = new Date()): AnalyticsRecord[] {
+    const cutoffDate = new Date(now);
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffStr = cutoffDate.toISOString().split('T')[0];
     return records.filter(r => r.date >= cutoffStr);
   }
 
-  public async getDailyTrend(days: number) {
+  public async getDailyTrend(days: number, now?: Date) {
     const records = await this.readAllRecords();
-    const filtered = this.filterByDays(records, days);
+    const filtered = this.filterByDays(records, days, now);
 
     const trend: Record<string, { date: string; totalTokens: number; costUSD: number; sessionsCount: number }> = {};
     for (const r of filtered) {
@@ -89,9 +89,9 @@ export class HistoricalAnalytics {
     return Object.values(trend).sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  public async getModelBreakdown(days: number) {
+  public async getModelBreakdown(days: number, now?: Date) {
     const records = await this.readAllRecords();
-    const filtered = this.filterByDays(records, days);
+    const filtered = this.filterByDays(records, days, now);
 
     const breakdown: Record<string, { model: string; totalTokens: number; costUSD: number }> = {};
     for (const r of filtered) {
@@ -108,9 +108,9 @@ export class HistoricalAnalytics {
     return breakdown;
   }
 
-  public async getHarnessBreakdown(days: number) {
+  public async getHarnessBreakdown(days: number, now?: Date) {
     const records = await this.readAllRecords();
-    const filtered = this.filterByDays(records, days);
+    const filtered = this.filterByDays(records, days, now);
 
     const breakdown: Record<string, { harness: string; totalTokens: number; costUSD: number }> = {};
     for (const r of filtered) {

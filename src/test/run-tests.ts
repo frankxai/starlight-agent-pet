@@ -218,7 +218,7 @@ async function runTests() {
   
   const analytics = new HistoricalAnalytics(testDbPath);
   analytics.appendDailySummary({
-    date: '2026-10-24',
+    date: '2026-08-25',
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -230,7 +230,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-10-24',
+    date: '2026-08-25',
     harness: 'antigravity',
     model: 'gemini-3.7-flash',
     inputTokens: 2000,
@@ -242,7 +242,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-10-25',
+    date: '2026-08-26',
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -254,13 +254,14 @@ async function runTests() {
     machineTag: '@test'
   });
 
-  const trend = await analytics.getDailyTrend(30);
+  const freezeTime = new Date('2026-09-01T12:00:00Z');
+  const trend = await analytics.getDailyTrend(30, freezeTime);
   assert(trend.length === 2, 'Trend data returns 2 days of records');
-  assert(trend[0].date === '2026-10-24', 'First date is correct');
+  assert(trend[0].date === '2026-08-25', 'First date is correct');
   assert(trend[0].totalTokens === 4500, `First day total tokens is correct (got ${trend[0].totalTokens})`);
   assert(trend[1].totalTokens === 2000, `Second day total tokens is correct (got ${trend[1].totalTokens})`);
 
-  const modelBreakdown = await analytics.getModelBreakdown(30);
+  const modelBreakdown = await analytics.getModelBreakdown(30, freezeTime);
   assert(modelBreakdown['claude-3-7-sonnet-20250219'].totalTokens === 3500, 'Model breakdown for Claude is correct');
   assert(modelBreakdown['gemini-3.7-flash'].totalTokens === 3000, 'Model breakdown for Gemini is correct');
 
