@@ -1,10 +1,12 @@
+
+import { buildKeyProviderMetrics, CompactHudService } from '../engine/compact-hud';
 import { FleetAggregator } from '../engine/aggregator';
 import { calculateCost, calculateSavings, resolveModelPricing } from '../engine/pricing';
 import { ClaudeParser } from '../engine/parsers/claude';
 import { AntigravityParser } from '../engine/parsers/antigravity';
 import { TokenUsage } from '../engine/types';
 import { normalizeTokscaleDailyReport, normalizeTokscaleQuotaReport, UsageIntelligence } from '../engine/usage';
-import { buildKeyProviderMetrics } from '../engine/compact-hud';
+
 import { CommandCenterBridge } from '../engine/command-center';
 
 process.env.STARLIGHT_DISABLE_TOKSCALE = '1';
@@ -216,9 +218,13 @@ async function runTests() {
   const fs = await import('fs');
   const testDbPath = path.join(os.tmpdir(), 'test_history_' + Date.now() + '.ndjson');
   
+    const now = Date.now();
+  const todayStr = new Date(now).toISOString().split('T')[0];
+  const yesterdayStr = new Date(now - 86400000).toISOString().split('T')[0];
+  const dayBeforeStr = new Date(now - 2 * 86400000).toISOString().split('T')[0];
   const analytics = new HistoricalAnalytics(testDbPath);
   analytics.appendDailySummary({
-    date: '2026-08-25',
+    date: dayBeforeStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -230,7 +236,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-08-25',
+    date: dayBeforeStr,
     harness: 'antigravity',
     model: 'gemini-3.7-flash',
     inputTokens: 2000,
@@ -242,7 +248,7 @@ async function runTests() {
     machineTag: '@test'
   });
   analytics.appendDailySummary({
-    date: '2026-08-26',
+    date: yesterdayStr,
     harness: 'claude',
     model: 'claude-3-7-sonnet-20250219',
     inputTokens: 1000,
@@ -256,7 +262,7 @@ async function runTests() {
 
   const trend = await analytics.getDailyTrend(30);
   assert(trend.length === 2, 'Trend data returns 2 days of records');
-  assert(trend[0].date === '2026-08-25', 'First date is correct');
+  assert(trend[0].date === dayBeforeStr, 'First date is correct');
   assert(trend[0].totalTokens === 4500, `First day total tokens is correct (got ${trend[0].totalTokens})`);
   assert(trend[1].totalTokens === 2000, `Second day total tokens is correct (got ${trend[1].totalTokens})`);
 
@@ -375,6 +381,126 @@ async function runTests() {
   const secondCommandSnapshot = await commandCenter.getSnapshot();
   assert(firstCommandSnapshot.status === 'online' && firstCommandSnapshot.surfaces.length === 5, 'Command Center bridge exposes fixed read-only surfaces');
   assert(secondCommandSnapshot.latencyMs === 12 && probeCalls === 1, 'Command Center health probe is cached instead of polling on every render');
+
+
+  // 11. Test Compact HUD Service missing edge cases
+  console.log('\n11. Testing Compact HUD...');
+
+
+  const emptyUsage = {
+    status: 'unavailable' as const,
+    source: 'tokscale' as const,
+    sourceLabel: 'Tokscale',
+    windowLabel: 'Today',
+    timezone: 'local',
+    totals: { totalProcessedTokens: 0, cacheReadPercent: 0, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, freshProcessedTokens: 0, freshInputPercent: 0, outputPercent: 0, cacheWritePercent: 0, messages: 0 },
+    cost: { apiEquivalentUSD: 0, actualBilledUSD: null, basisLabel: '' },
+    byHarness: [],
+    byModel: [],
+    quotas: [],
+    coverage: { measuredHarnesses: [], note: '' }
+  };
+  const metricsUnavailable = buildKeyProviderMetrics(emptyUsage as any);
+  assert(metricsUnavailable.find((m: any) => m.id === 'codex')?.basis === 'unavailable', 'Provider without quota shows unavailable when status is not ready/stale');
+
+  const extremeUsage = {
+    ...emptyUsage,
+    status: 'ready' as const,
+    totals: { ...emptyUsage.totals, totalProcessedTokens: 10 },
+    byHarness: [{ id: 'claude', label: 'Claude', provider: 'anthropic', totalProcessedTokens: 15, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 150 }],
+  };
+  const metricsExtreme = buildKeyProviderMetrics(extremeUsage as any);
+  assert(metricsExtreme.find((m: any) => m.id === 'claude')?.percent === 100, 'Percentage is capped at 100%');
+
+  const multiQuotaUsage = {
+    ...emptyUsage,
+    status: 'ready' as const,
+    quotas: [
+      { provider: 'Codex', plan: undefined, label: 'A', usedPercent: 40, remainingPercent: 60, status: 'healthy' as const },
+      { provider: 'Codex', plan: undefined, label: 'B', usedPercent: 80, remainingPercent: 20, status: 'healthy' as const }
+    ]
+  };
+  const metricsMulti = buildKeyProviderMetrics(multiQuotaUsage as any);
+  assert(metricsMulti.find((m: any) => m.id === 'codex')?.percent === 80, 'selectQuota prefers the highest usedPercent');
+
+
+  const missingByModelUsage = {
+    ...compactUsage,
+    byModel: [
+      { id: 'random', label: 'Random', totalProcessedTokens: 0, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 0 },
+      { id: 'claude', label: 'Claude', provider: 'anthropic', totalProcessedTokens: 15, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 100 }
+    ]
+  };
+  const mockMissingByModel = { getSnapshot: () => missingByModelUsage as any };
+  const mockMissingByModelService = new CompactHudService(mockMissingByModel, commandCenter);
+
+
+  const mockMissingByModelSnapshot = await mockMissingByModelService.getSnapshot();
+  assert(mockMissingByModelSnapshot.allModels.length === 1 && mockMissingByModelSnapshot.allModels[0].id === 'claude', 'allModels filters out models with 0 processed tokens');
+
+
+  const mockOfflineCommandCenter = new CommandCenterBridge(async () => ({ online: false, latencyMs: null }), 1000, () => 0);
+  const defaultFreshnessService = new CompactHudService({ getSnapshot: () => compactUsage as any }, mockOfflineCommandCenter);
+  const defaultFreshnessSnapshot = await defaultFreshnessService.getSnapshot();
+  assert(defaultFreshnessSnapshot.commandCenter.status === 'offline', 'CommandCenter dependency injection resolves deterministic offline mock');
+
+  const zeroTotalsUsage = {
+    ...emptyUsage,
+    status: 'ready' as const,
+    totals: { ...emptyUsage.totals, totalProcessedTokens: 0 },
+    byHarness: [{ id: 'claude', label: 'Claude', provider: 'anthropic', totalProcessedTokens: 15, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 0 }],
+  };
+
+  const zeroTotalsMetrics = buildKeyProviderMetrics(zeroTotalsUsage as any);
+  assert(zeroTotalsMetrics.find((m: any) => m.id === 'claude')?.percent === 0, 'Zero processed tokens defaults to 0%');
+
+  const planQuotaUsage = {
+    ...compactUsage,
+    quotas: [
+      { provider: 'Codex', plan: 'Pro', label: 'Capped', usedPercent: 40, remainingPercent: 60, status: 'healthy' as const }
+    ]
+  };
+  const metricsPlan = buildKeyProviderMetrics(planQuotaUsage as any);
+  assert(metricsPlan.find((m: any) => m.id === 'codex')?.detail === 'Capped · Pro', 'Provider quota handles defined plan correctly');
+
+  const opencodeUsage = {
+    ...compactUsage,
+    byModel: [{ id: 'opencode_free', label: 'OpenCode', provider: 'opencode', totalProcessedTokens: 50, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 50 }],
+  };
+  const metricsOpencode = buildKeyProviderMetrics(opencodeUsage as any);
+  assert(metricsOpencode.find((m: any) => m.id === 'opencode')?.percent === 5, 'OpenCode matcher correctly finds opencode models');
+
+  const grokUsage = {
+    ...compactUsage,
+    byModel: [{ id: 'random_model', label: 'Grok', provider: 'xai', totalProcessedTokens: 50, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 50 }],
+  };
+  const metricsGrok = buildKeyProviderMetrics(grokUsage as any);
+  assert(metricsGrok.find((m: any) => m.id === 'grok')?.percent === 5, 'Grok matcher correctly finds xai models');
+
+  const antigravityUsage = {
+    ...compactUsage,
+    byHarness: [{ id: 'antigravity', label: 'AntiG', provider: 'google', totalProcessedTokens: 50, freshInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, messageCount: 0, apiEquivalentCostUSD: 0, percent: 50 }],
+  };
+  const metricsAntiG = buildKeyProviderMetrics(antigravityUsage as any);
+  assert(metricsAntiG.find((m: any) => m.id === 'antigravity')?.percent === 5, 'AntiG matcher correctly finds antigravity harness');
+
+  const unusedQuotaUsage = {
+    ...compactUsage,
+    quotas: [
+      { provider: 'UnusedProvider', plan: undefined, label: 'Uncapped', usedPercent: 40, remainingPercent: 60, status: 'healthy' as const }
+    ]
+  };
+  const metricsUnused = buildKeyProviderMetrics(unusedQuotaUsage as any);
+  assert(metricsUnused.find((m: any) => m.id === 'codex')?.detail !== 'Uncapped', 'Provider quota handles unmatched quota provider correctly');
+
+  const missingFreshnessUsage = {
+    ...compactUsage,
+    freshness: undefined
+  };
+  const missingFreshnessMock = { getSnapshot: () => missingFreshnessUsage as any };
+  const missingFreshnessService = new CompactHudService(missingFreshnessMock, commandCenter);
+  const missingFreshnessSnapshot = await missingFreshnessService.getSnapshot();
+  assert(missingFreshnessSnapshot.freshness.activity.status === 'unavailable', 'Snapshot provides fallback freshness if missing in snapshot');
 
   // Clean up
   if (fs.existsSync(testDbPath)) {
